@@ -44,6 +44,6 @@
     "mineflayer": "file:.",
     "mocha": "^8.0.1",
     "standard": "^16.0.1",
-    "standard-markdown": "^6.0.0"
+    "standard-markdown": "^7.1.0"
   }
 }
