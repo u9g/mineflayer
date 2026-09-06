@@ -500,6 +500,30 @@ for (const supportedVersion of mineflayer.testedVersions) {
       })
     })
 
+    describe('settings', () => {
+      it('sends Client Information after login only on versions without a configuration phase', async function () {
+        let sent = 0
+        const originalWrite = bot._client.write.bind(bot._client)
+        bot._client.write = (name, params) => {
+          if (name === 'settings' && bot._client.state === 'play') {
+            sent++
+            assert.strictEqual(params.locale, 'en_us')
+            assert.strictEqual(params.viewDistance, sent === 1 && bot.supportFeature('hasConfigurationState') ? 8 : 12)
+          }
+          return originalWrite(name, params)
+        }
+        const client = (await once(server, 'playerJoin'))[0]
+        await client.write('login', bot.test.generateLoginPacket())
+        await once(bot, 'login')
+        await sleep(50)
+        const afterLogin = bot.supportFeature('hasConfigurationState') ? 0 : 1
+        assert.strictEqual(sent, afterLogin)
+        bot.setSettings({ viewDistance: bot.supportFeature('hasConfigurationState') ? 'short' : 'far' })
+        assert.strictEqual(sent, afterLogin + 1)
+        bot._client.write = originalWrite
+      })
+    })
+
     describe('world', () => {
       const pos = vec3(1, 65, 1)
       const goldId = 41
