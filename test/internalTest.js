@@ -69,6 +69,9 @@ for (const supportedVersion of mineflayer.testedVersions) {
         port: PORT
       })
       bot.test = {}
+      // Plugins are injected on a timer after createBot, which can lose the
+      // race against the mock server's playerJoin
+      bot.test.pluginsLoaded = new Promise(resolve => bot.once('inject_allowed', resolve))
 
       bot.test.buildChunk = () => {
         if (bot.supportFeature('tallWorld')) {
@@ -853,6 +856,7 @@ for (const supportedVersion of mineflayer.testedVersions) {
           teleportId: 0
         }
         server.on('playerJoin', async (client) => {
+          await bot.test.pluginsLoaded
           bot.once('respawn', () => {
             assert.ok(bot.world.getColumn(0, 0) !== undefined)
             bot.once('respawn', () => {
@@ -1817,6 +1821,7 @@ for (const supportedVersion of mineflayer.testedVersions) {
         const testYaw = 1.5
         const testPitch = -0.3
         server.on('playerJoin', async (client) => {
+          await bot.test.pluginsLoaded
           await client.write('login', bot.test.generateLoginPacket())
           await client.write('position', {
             x: 0,
@@ -1847,7 +1852,404 @@ for (const supportedVersion of mineflayer.testedVersions) {
           await sleep(100)
           bot.entity.yaw = testYaw
           bot.entity.pitch = testPitch
+          const Item = require('prismarine-item')(registry)
+          bot.quickBarSlot = 0
+          bot.inventory.updateSlot(bot.QUICK_BAR_START, new Item(registry.itemsByName.stone.id, 1))
           bot.activateItem()
+        })
+      })
+    })
+
+    describe('resource pack', () => {
+      function packetHas (name) {
+        const fields = registry.protocol?.play?.toServer?.types?.packet_resource_pack_receive?.[1] ??
+          registry.protocol?.configuration?.toServer?.types?.packet_resource_pack_receive?.[1]
+        return fields?.some(f => f.name === name)
+      }
+      const packUuid = '8ef4746b-93b7-3c32-9dcb-b375016c114d'
+
+      it('accepts with the vanilla status sequence', (done) => {
+        server.on('playerJoin', async (client) => {
+          await bot.test.pluginsLoaded
+          const loggedIn = once(bot, 'login')
+          await client.write('login', bot.test.generateLoginPacket())
+          await loggedIn
+          if (packetHas('uuid')) {
+            bot._client.emit('add_resource_pack', { uuid: packUuid, url: 'http://example.com/pack.zip', forced: false })
+          } else {
+            bot._client.emit('resource_pack_send', { url: 'http://example.com/pack.zip', hash: 'abc' })
+          }
+          const writes = []
+          bot._client.write = (name, params) => { writes.push({ name, params }) }
+          bot.acceptResourcePack()
+          try {
+            assert.ok(writes.every(w => w.name === 'resource_pack_receive'))
+            assert.deepStrictEqual(writes.map(w => w.params.result), packetHas('uuid') ? [3, 4, 0] : [3, 0])
+            for (const { params } of writes) {
+              if (packetHas('uuid')) assert.ok(params.uuid, 'accept must carry the pack uuid')
+              else assert.strictEqual(params.uuid, undefined)
+              if (packetHas('hash')) assert.strictEqual(params.hash, 'abc')
+              else assert.strictEqual(params.hash, undefined)
+            }
+            done()
+          } catch (err) {
+            done(err)
+          }
+        })
+      })
+
+      it('denies with a single DECLINED', (done) => {
+        server.on('playerJoin', async (client) => {
+          await bot.test.pluginsLoaded
+          const loggedIn = once(bot, 'login')
+          await client.write('login', bot.test.generateLoginPacket())
+          await loggedIn
+          if (packetHas('uuid')) {
+            bot._client.emit('add_resource_pack', { uuid: packUuid, url: 'http://example.com/pack.zip', forced: false })
+          }
+          const writes = []
+          bot._client.write = (name, params) => { writes.push({ name, params }) }
+          bot.denyResourcePack()
+          try {
+            assert.strictEqual(writes.length, 1)
+            assert.strictEqual(writes[0].name, 'resource_pack_receive')
+            assert.strictEqual(writes[0].params.result, 1)
+            if (packetHas('uuid')) assert.ok(writes[0].params.uuid, 'deny must carry the pack uuid')
+            else assert.strictEqual(writes[0].params.uuid, undefined)
+            done()
+          } catch (err) {
+            done(err)
+          }
+        })
+      })
+    })
+
+    describe('entity interaction', () => {
+      it('activateEntity sends the vanilla interact packets at mid height, with the sneak state', (done) => {
+        server.on('playerJoin', async (client) => {
+          await bot.test.pluginsLoaded
+          const loggedIn = once(bot, 'login')
+          await client.write('login', bot.test.generateLoginPacket())
+          await loggedIn
+          bot.lookAt = async () => {}
+          const writes = []
+          // Every write must match this version's packet shape.
+          bot._client.write = (name, params) => {
+            bot._client.serializer.createPacketBuffer({ name, params })
+            writes.push({ name, params })
+          }
+          bot.setControlState('sneak', true)
+          const entity = { id: 7, position: vec3(3, 64, 3), height: 1.95 }
+          await bot.activateEntity(entity)
+          await bot.activateEntityAt(entity, vec3(3.5, 65, 3))
+          try {
+            const useEntityHasLocation = registry.protocol.play.toServer.types.packet_use_entity[1].some(field => field.name === 'location')
+            assert.deepStrictEqual(writes.filter(w => w.name === 'use_entity').map(w => w.params), useEntityHasLocation
+              ? [
+                  { target: 7, hand: 0, location: vec3(0, 0.975, 0), sneaking: true },
+                  { target: 7, hand: 0, location: vec3(0.5, 1, 0), sneaking: true }
+                ]
+              : [
+                  { target: 7, mouse: 2, x: 0, y: 0.975, z: 0, hand: 0, sneaking: true },
+                  { target: 7, mouse: 0, hand: 0, sneaking: true },
+                  { target: 7, mouse: 2, x: 0.5, y: 1, z: 0, hand: 0, sneaking: true },
+                  { target: 7, mouse: 0, hand: 0, sneaking: true }
+                ])
+            done()
+          } catch (err) {
+            done(err)
+          }
+        })
+      })
+
+      it('aims activateEntity at the face of the hitbox the bot looks at', (done) => {
+        server.on('playerJoin', async (client) => {
+          await bot.test.pluginsLoaded
+          const loggedIn = once(bot, 'login')
+          await client.write('login', bot.test.generateLoginPacket())
+          await loggedIn
+          bot.lookAt = async () => {}
+          const writes = []
+          bot._client.write = (name, params) => {
+            bot._client.serializer.createPacketBuffer({ name, params })
+            writes.push({ name, params })
+          }
+          bot.entity.position = vec3(0, 64, 3)
+          // Straight along +x, so the ray enters the box at half its width on the near side.
+          const entity = { id: 7, position: vec3(3, 64, 3), height: 1.8, width: 0.6 }
+          await bot.activateEntity(entity)
+          try {
+            const first = writes.find(w => w.name === 'use_entity').params
+            const hit = first.location ?? vec3(first.x, first.y, first.z)
+            assert.ok(Math.abs(hit.x + 0.3) < 1e-9, `hit x on the near face: ${hit}`)
+            assert.ok(Math.abs(hit.z) < 1e-9, `hit z centred: ${hit}`)
+            assert.ok(hit.y > 0 && hit.y < entity.height, `hit y inside the box: ${hit}`)
+            done()
+          } catch (err) {
+            done(err)
+          }
+        })
+      })
+    })
+
+    describe('activateBlock', () => {
+      it('defaults the cursor to the centre of the clicked face and swings after use_item_on', (done) => {
+        server.on('playerJoin', async (client) => {
+          await bot.test.pluginsLoaded
+          const loggedIn = once(bot, 'login')
+          await client.write('login', bot.test.generateLoginPacket())
+          await loggedIn
+          bot.lookAt = async () => {}
+          const writes = []
+          bot._client.write = (name, params) => { writes.push({ name, params }) }
+          const block = { position: vec3(1, 65, 1) }
+          await bot.activateBlock(block)
+          await bot.activateBlock(block, vec3(-1, 0, 0))
+          try {
+            const scale = bot.supportFeature('blockPlaceHasHandAndFloatCursor') || bot.supportFeature('blockPlaceHasInsideBlock') ? 1 : 16
+            assert.deepStrictEqual(writes.map(w => w.name), ['block_place', 'arm_animation', 'block_place', 'arm_animation'])
+            const cursor = ({ params }) => [params.cursorX / scale, params.cursorY / scale, params.cursorZ / scale, params.direction]
+            assert.deepStrictEqual(cursor(writes[0]), [0.5, 1, 0.5, 1])
+            assert.deepStrictEqual(cursor(writes[2]), [0, 0.5, 0.5, 4])
+            done()
+          } catch (err) {
+            done(err)
+          }
+        })
+      })
+    })
+
+    describe('activateItem', () => {
+      it('does nothing with an empty hand', (done) => {
+        const Item = require('prismarine-item')(registry)
+        server.on('playerJoin', async (client) => {
+          await bot.test.pluginsLoaded
+          const loggedIn = once(bot, 'login')
+          await client.write('login', bot.test.generateLoginPacket())
+          await loggedIn
+          const writes = []
+          bot._client.write = (name, params) => { writes.push(name) }
+          bot.quickBarSlot = 0
+          bot.activateItem()
+          bot.activateItem(true)
+          try {
+            assert.deepStrictEqual(writes, [])
+            assert.strictEqual(bot.usingHeldItem, false)
+            bot.inventory.updateSlot(bot.QUICK_BAR_START, new Item(registry.itemsByName.stone.id, 1))
+            bot.activateItem()
+            assert.deepStrictEqual(writes, [bot.supportFeature('useItemWithOwnPacket') ? 'use_item' : 'block_place'])
+            assert.strictEqual(bot.usingHeldItem, true)
+            done()
+          } catch (err) {
+            done(err)
+          }
+        })
+      })
+    })
+
+    describe('generic place', () => {
+      it('swings the arm after use_item_on', (done) => {
+        const Item = require('prismarine-item')(registry)
+        server.on('playerJoin', async (client) => {
+          await bot.test.pluginsLoaded
+          const loggedIn = once(bot, 'login')
+          await client.write('login', bot.test.generateLoginPacket())
+          await loggedIn
+          const writes = []
+          bot._client.write = (name, params) => { writes.push(name) }
+          bot.quickBarSlot = 0
+          bot.inventory.updateSlot(bot.QUICK_BAR_START, new Item(registry.itemsByName.stone.id, 1))
+          await bot._genericPlace({ position: vec3(1, 65, 1) }, vec3(0, 1, 0), { forceLook: 'ignore', swingArm: 'right' })
+          try {
+            assert.deepStrictEqual(writes, ['block_place', 'arm_animation'])
+            done()
+          } catch (err) {
+            done(err)
+          }
+        })
+      })
+    })
+
+    describe('digging', () => {
+      const blockPos = vec3(1, 65, 1)
+      const otherPos = vec3(2, 65, 1)
+      const BlockFace = require('prismarine-world').iterators.BlockFace
+      const hasSequence = registry.protocol?.play?.toServer?.types?.packet_block_dig?.[1]?.some(f => f.name === 'sequence')
+      // Sequence value expected for the nth prediction packet
+      const seq = n => hasSequence ? n : 0
+
+      async function setup (client, gameMode) {
+        await bot.test.pluginsLoaded
+        const dirtId = registry.blocksByName.dirt.id
+        const loaded = once(bot, 'chunkColumnLoad')
+        client.write('login', bot.test.generateLoginPacket())
+        const chunk = bot.test.buildChunk()
+        chunk.setBlockType(blockPos, dirtId)
+        chunk.setBlockType(otherPos, dirtId)
+        client.write('map_chunk', generateChunkPacket(chunk))
+        await loaded
+        bot.entity.position = vec3(1.5, 66, 1.5)
+        bot.entity.eyeHeight = 1.62
+        bot.entity.onGround = true
+        bot.entity.effects = {}
+        bot.game.gameMode = gameMode
+        const writes = []
+        bot._client.write = (name, params) => { writes.push({ name, params }) }
+        return writes
+      }
+      const digPackets = writes => writes.filter(w => w.name === 'block_dig').map(({ params }) => [params.status, params.face, params.sequence])
+
+      it('instant break sends only START_DESTROY_BLOCK and resolves on the block update', (done) => {
+        server.on('playerJoin', async (client) => {
+          try {
+            const writes = await setup(client, 'creative')
+            const block = bot.blockAt(blockPos)
+            assert.strictEqual(bot.digTime(block), 0)
+            const completed = once(bot, 'diggingCompleted')
+            await bot.dig(block, 'ignore')
+            await completed
+            assert.deepStrictEqual(writes.map(w => w.name), ['block_dig', 'arm_animation'])
+            assert.deepStrictEqual(digPackets(writes), [[0, BlockFace.TOP, seq(1)]])
+            assert.strictEqual(bot.blockAt(blockPos).type, 0)
+            assert.strictEqual(bot.targetDigBlock, null)
+            done()
+          } catch (err) {
+            done(err)
+          }
+        })
+      })
+
+      it('swings every physics tick while digging', (done) => {
+        server.on('playerJoin', async (client) => {
+          try {
+            const writes = await setup(client, 'survival')
+            const block = bot.blockAt(blockPos)
+            assert.ok(bot.digTime(block) > 0)
+            const dig = bot.dig(block, 'ignore')
+            bot.emit('physicsTick')
+            bot.emit('physicsTick')
+            assert.deepStrictEqual(writes.map(w => w.name), ['block_dig', 'arm_animation', 'arm_animation', 'arm_animation'])
+            await dig
+            writes.length = 0
+            bot.emit('physicsTick')
+            assert.deepStrictEqual(writes, [])
+            done()
+          } catch (err) {
+            done(err)
+          }
+        })
+      })
+
+      it('aborts with face DOWN from stopDigging and with the new face on a retarget', (done) => {
+        server.on('playerJoin', async (client) => {
+          try {
+            const writes = await setup(client, 'survival')
+            const first = bot.dig(bot.blockAt(blockPos), true, vec3(-1, 0, 0))
+            const second = bot.dig(bot.blockAt(otherPos), true, vec3(0, 0, 1))
+            await assert.rejects(first, /Digging aborted/)
+            bot.stopDigging()
+            await assert.rejects(second, /Digging aborted/)
+            assert.deepStrictEqual(digPackets(writes), [
+              [0, BlockFace.WEST, seq(1)],
+              [1, BlockFace.SOUTH, 0],
+              [0, BlockFace.SOUTH, seq(2)],
+              [1, BlockFace.BOTTOM, 0]
+            ])
+            assert.strictEqual(bot.targetDigBlock, null)
+            done()
+          } catch (err) {
+            done(err)
+          }
+        })
+      })
+    })
+
+    describe('attack', () => {
+      it('rejects targets the server kicks for and attacks the rest', (done) => {
+        server.on('playerJoin', async (client) => {
+          try {
+            await bot.test.pluginsLoaded
+            const loggedIn = once(bot, 'login')
+            await client.write('login', bot.test.generateLoginPacket())
+            await loggedIn
+            const writes = []
+            bot._client.write = (name, params) => { writes.push(name) }
+            assert.throws(() => bot.attack(bot.entity), /cannot attack/)
+            assert.throws(() => bot.attack({ id: 11, name: 'item' }), /cannot attack/)
+            assert.throws(() => bot.attack({ id: 12, name: 'experience_orb' }), /cannot attack/)
+            assert.deepStrictEqual(writes, [])
+            bot.attack({ id: 13, name: 'zombie' })
+            assert.strictEqual(writes.length, 2)
+            assert.ok(writes.includes('arm_animation'))
+            done()
+          } catch (err) {
+            done(err)
+          }
+        })
+      })
+    })
+
+    describe('dismount', () => {
+      it('holds sneak for one tick on 1.21.3+ and sends the steer_vehicle unmount flag before', (done) => {
+        server.on('playerJoin', async (client) => {
+          try {
+            await bot.test.pluginsLoaded
+            const loggedIn = once(bot, 'login')
+            await client.write('login', bot.test.generateLoginPacket())
+            await loggedIn
+            const events = []
+            bot.setControlState = (control, state) => { events.push([control, state]) }
+            bot.waitForTicks = async (ticks) => { events.push(['tick', ticks]) }
+            bot._client.write = (name, params) => { events.push([name, params]) }
+            bot.vehicle = { id: 21 }
+            await bot.dismount()
+            if (bot.supportFeature('newPlayerInputPacket')) {
+              assert.deepStrictEqual(events, [['sneak', true], ['tick', 1], ['sneak', false]])
+            } else {
+              assert.deepStrictEqual(events, [['steer_vehicle', { sideways: 0, forward: 0, jump: 2 }]])
+            }
+            done()
+          } catch (err) {
+            done(err)
+          }
+        })
+      })
+    })
+
+    describe('block prediction sequence', () => {
+      it('shares one pre-incremented counter across use_item and use_item_on, 0 on release', function (done) {
+        const useItemFields = registry.protocol?.play?.toServer?.types?.packet_use_item?.[1]
+        if (!useItemFields?.some(f => f.name === 'sequence')) {
+          this.skip()
+          return
+        }
+        const Item = require('prismarine-item')(registry)
+        server.on('playerJoin', async (client) => {
+          await bot.test.pluginsLoaded
+          const loggedIn = once(bot, 'login')
+          await client.write('login', bot.test.generateLoginPacket())
+          await loggedIn
+          const writes = []
+          bot._client.write = (name, params) => { writes.push([name, params.sequence]) }
+          bot.quickBarSlot = 0
+          bot.inventory.updateSlot(bot.QUICK_BAR_START, new Item(registry.itemsByName.stone.id, 1))
+
+          bot.activateItem()
+          bot.deactivateItem()
+          await bot._genericPlace({ position: vec3(1, 65, 1) }, vec3(0, 1, 0), { forceLook: 'ignore' })
+          bot.activateItem()
+
+          try {
+            assert.deepStrictEqual(writes, [
+              ['use_item', 1],
+              ['block_dig', 0],
+              ['block_place', 2],
+              ['use_item', 3]
+            ])
+            done()
+          } catch (err) {
+            done(err)
+          }
         })
       })
     })
