@@ -1,9 +1,9 @@
-const { once } = require('events')
+const { once } = require('../../lib/promise_utils')
 const { Vec3 } = require('vec3')
 
 module.exports = () => async (bot) => {
   const { blocksByName, itemsByName } = bot.registry
-  const Item = require('prismarine-item')(bot.version)
+  const Item = require('prismarine-item')(bot.registry)
 
   let populateBlockInventory
   let craftItem
@@ -47,12 +47,14 @@ module.exports = () => async (bot) => {
     }
   }
 
+  // Test 2x2 crafting (log → planks)
   await bot.test.setInventorySlot(36, new Item(populateBlockInventory.id, 1, 0))
   await bot.test.becomeSurvival()
   await craft(1, craftItem)
   await bot.test.setBlock({ x: 1, y: 0, z: 0, relative: true, blockName: 'crafting_table' })
   bot.chat('/give @p stick 7')
   await once(bot.inventory, 'updateSlot')
+  await bot.test.wait(500)
   const craftingTable = bot.findBlock({ matching: blocksByName.crafting_table.id })
   await bot.craft(bot.recipesFor(itemsByName.ladder.id, null, null, true)[0], 1, craftingTable)
 }

@@ -1,11 +1,11 @@
 /*
- * This script will automaticly look at the closest entity.
+ * This script will automatically look at the closest entity.
  * It checks for a near entity every tick.
  */
 const mineflayer = require('mineflayer')
 
 if (process.argv.length < 4 || process.argv.length > 6) {
-  console.log('Usage : node echo.js <host> <port> [<name>] [<password>]')
+  console.log('Usage : node looker.js <host> <port> [<name>] [<password>]')
   process.exit(1)
 }
 

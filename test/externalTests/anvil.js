@@ -1,9 +1,9 @@
 const assert = require('assert')
-const { once } = require('events')
+const { once } = require('../../lib/promise_utils')
 
 module.exports = () => {
   async function runTest (bot, testFunction) {
-    const Item = require('prismarine-item')(bot.version)
+    const Item = require('prismarine-item')(bot.registry)
     const renameCost = () => bot.registry.isNewerOrEqualTo('1.8.9') ? 0 : 1 // weird quirk of anvils
     const renameName = (name) => bot.registry.isOlderThan('1.13.2') ? name : JSON.stringify({ text: name }) // weird quirk of anvils
     await bot.test.becomeCreative()
@@ -59,7 +59,7 @@ module.exports = () => {
     assert.strictEqual(bot.experience.level, 994)
     assert.strictEqual(anvil.slots[3].repairCost, 1)
     assert.deepStrictEqual(anvil.slots[3].enchants, [{ name: 'sharpness', lvl: 5 }])
-    anvil.close()
+    await anvil.close()
     await bot.test.wait(1000)
   })
 
@@ -83,7 +83,7 @@ module.exports = () => {
     assert.strictEqual(bot.experience.level, 996)
     assert.strictEqual(anvil.slots[3].repairCost, 1)
     assert.deepStrictEqual(anvil.slots[3].enchants, [{ name: 'sharpness', lvl: 5 }, { name: 'unbreaking', lvl: 3 }])
-    anvil.close()
+    await anvil.close()
     await bot.test.wait(1000)
   })
 
@@ -103,7 +103,7 @@ module.exports = () => {
     assert.strictEqual(bot.experience.level, 998)
     assert.strictEqual(anvil.slots[3].repairCost, renameCost())
     assert.deepStrictEqual(anvil.slots[3].customName, renameName('hello'))
-    anvil.close()
+    await anvil.close()
     await bot.test.wait(1000)
   })
 
@@ -128,7 +128,7 @@ module.exports = () => {
     assert.strictEqual(anvil.slots[3].repairCost, 1)
     assert.deepStrictEqual(anvil.slots[3].enchants, [{ name: 'sharpness', lvl: 5 }, { name: 'unbreaking', lvl: 3 }])
     assert.strictEqual(anvil.slots[3].customName, renameName('lol'))
-    anvil.close()
+    await anvil.close()
     await bot.test.wait(1000)
   })
 

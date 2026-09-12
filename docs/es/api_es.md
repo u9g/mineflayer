@@ -141,7 +141,7 @@
       - ["respawn"](#respawn)
       - ["game"](#game)
       - ["resourcePack" (url, hash)](#resourcepack-url-hash)
-      - ["title"](#title)
+      - ["title" (title, type)](#title-title-type)
       - ["rain"](#rain)
       - ["weatherUpdate"](#weatherupdate)
       - ["time"](#time)
@@ -943,9 +943,9 @@ Día del mundo
 
 #### bot.time.isDay
 
-Si es de día o no
+Si es de día o no.
 
-Basado en si la hora actual está entre los 13000 y 23000 ticks.
+Basado en si la hora actual está entre 0 y 13000 ticks (día + atardecer).
 
 #### bot.time.moonPhase
 
@@ -993,7 +993,7 @@ Todos los scoreboards que el bot conoce en un object de forma casilla de visuali
  * `belowName` - scoreboard que está debajo del nombre
  * `sidebar` - scoreboard que está en la barra del lado
  * `list` - scoreboard que está en la lista
- * `0-18` - casillas definidas en el [protocol](https://wiki.vg/Protocol#Display_Scoreboard)
+ * `0-18` - casillas definidas en el [protocol](https://minecraft.wiki/w/Protocol#Display_Scoreboard)
 
 #### bot.controlState
 
@@ -1071,11 +1071,12 @@ Se emite cuando el servidor cambia cualquiera de sus propiedades
 
 Se emite cuando el servidor manda un paquete de recursos
 
-#### "title"
+#### "title" (title, type)
 
 Se emite cuando el servidor manda/muestra un título
 
- * `text` - texto del título
+ * `title` - texto del título
+ * `type` - tipo del título "subtitle" o "title"
 
 #### "rain"
 
@@ -1289,7 +1290,7 @@ Se emite cuando un bloque de notas se dispara en algún sitio
  * `instrument`:
    - `id`: id con números enteros
    - `name`: uno de estos [`harp`, `doubleBass`, `snareDrum`, `sticks`, `bassDrum`]. (`harpa`, `dobleBajo`, `tambor`, `palos`, `tamborBajo`)
- * `pitch`: El tono de la nota (entre 0 y 24 ambos incluídos donde 0 es el más bajo y 24 es el más alto). Se puede leer más (sobre como los valores de los tonos corresponden a las notas en la vida real) aquí: [official Minecraft wiki](http://www.minecraftwiki.net/wiki/Note_Block).
+ * `pitch`: El tono de la nota (entre 0 y 24 ambos incluídos donde 0 es el más bajo y 24 es el más alto). Se puede leer más (sobre como los valores de los tonos corresponden a las notas en la vida real) aquí: [official Minecraft wiki](http://minecraft.wiki/w/Note_Block).
 
 #### "pistonMove" (block, isPulling, direction)
 
@@ -1916,7 +1917,7 @@ Todas las opciones tienen como predeterminado false, excepto modo que es 2 (para
 
 Esto puede usarse para ver si una característica está disponible en la versión del bot de Minecraft. Normalmente esto es solo para manejar funciones que son específicas de una versión.
 
-Puedes encontrar la lista de características en [./lib/features.json](https://github.com/PrismarineJS/mineflayer/blob/master/lib/features.json) file.
+Puedes encontrar la lista de características en [features.json](https://github.com/PrismarineJS/minecraft-data/blob/master/data/pc/common/features.json) file.
 
 #### bot.waitForTicks(ticks)
 
@@ -1930,7 +1931,7 @@ Estos son métodos de un nivel más bajo para el inventario, pueden ser útils a
 
 Esta función también devueve un `Promise`, con `void` como argumento al finalizar.
 
-Hacer click en la ventana/interfaz actual, los detalles están en https://wiki.vg/Protocol#Click_Window
+Hacer click en la ventana/interfaz actual, los detalles están en https://minecraft.wiki/w/Protocol#Click_Window
  * slot - número que representa la casilla de la ventan
  * mouseButton - 0 para click izquierdo, y 1 para click derecho
  * mode - mineflayer solo tiene disponible el modo 0

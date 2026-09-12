@@ -16,6 +16,7 @@
     - [vec3](#vec3)
     - [mineflayer.Location](#mineflayerlocation)
     - [Entity](#entity)
+      - [Player Skin Data](#player-skin-data)
     - [Block](#block)
     - [Biome](#biome)
     - [Item](#item)
@@ -75,6 +76,14 @@
       - [BossBar.isDragonBar](#bossbarisdragonbar)
       - [BossBar.createFog](#bossbarcreatefog)
       - [BossBar.color](#bossbarcolor)
+    - [mineflayer.Particle](#mineflayerparticle)
+      - [Particle.id](#particleid)
+      - [Particle.name](#particlename)
+      - [Particle.position](#particleposition)
+      - [Particle.offset](#particleoffset)
+      - [Particle.longDistanceRender](#particlelongdistancerender)
+      - [Particle.count](#particlecount)
+      - [Particle.movementSpeed](#particlemovementspeed)
   - [Bot](#bot)
     - [mineflayer.createBot(options)](#mineflayercreatebotoptions)
     - [Properties](#properties)
@@ -119,6 +128,7 @@
         - [bot.settings.skinParts.showHat - boolean](#botsettingsskinpartsshowhat---boolean)
       - [bot.settings.enableTextFiltering - boolean](#botsettingsenabletextfiltering---boolean)
       - [bot.settings.enableServerListing - boolean](#botsettingsenableserverlisting---boolean)
+      - [bot.settings.particleStatus - string](#botsettingsparticlestatus---string)
       - [bot.experience.level](#botexperiencelevel)
       - [bot.experience.points](#botexperiencepoints)
       - [bot.experience.progress](#botexperienceprogress)
@@ -127,6 +137,7 @@
       - [bot.foodSaturation](#botfoodsaturation)
       - [bot.oxygenLevel](#botoxygenlevel)
       - [bot.physics](#botphysics)
+      - [bot.fireworkRocketDuration](#botfireworkrocketduration)
       - [bot.simpleClick.leftMouse (slot)](#botsimpleclickleftmouse-slot)
       - [bot.simpleClick.rightMouse (slot)](#botsimpleclickrightmouse-slot)
       - [bot.time.doDaylightCycle](#bottimedodaylightcycle)
@@ -150,16 +161,18 @@
     - [Events](#events)
       - ["chat" (username, message, translate, jsonMsg, matches)](#chat-username-message-translate-jsonmsg-matches)
       - ["whisper" (username, message, translate, jsonMsg, matches)](#whisper-username-message-translate-jsonmsg-matches)
-      - ["actionBar" (jsonMsg)](#actionbar-jsonmsg)
-      - ["message" (jsonMsg, position)](#message-jsonmsg-position)
-      - ["messagestr" (message, messagePosition, jsonMsg)](#messagestr-message-messageposition-jsonmsg)
+      - ["actionBar" (jsonMsg, verified)](#actionbar-jsonmsg-verified)
+      - ["message" (jsonMsg, position, sender, verified)](#message-jsonmsg-position-sender-verified)
+      - ["messagestr" (message, messagePosition, jsonMsg, sender, verified)](#messagestr-message-messageposition-jsonmsg-sender-verified)
       - ["inject_allowed"](#inject_allowed)
       - ["login"](#login)
       - ["spawn"](#spawn)
       - ["respawn"](#respawn)
       - ["game"](#game)
       - ["resourcePack" (url, hash)](#resourcepack-url-hash)
-      - ["title"](#title)
+      - ["title" (title, type)](#title-title-type)
+      - ["title_times" (fadeIn, stay, fadeOut)](#title_times-fadein-stay-fadeout)
+      - ["title_clear"](#title_clear)
       - ["rain"](#rain)
       - ["weatherUpdate"](#weatherupdate)
       - ["time"](#time)
@@ -178,6 +191,7 @@
       - ["entityTamed" (entity)](#entitytamed-entity)
       - ["entityShakingOffWater" (entity)](#entityshakingoffwater-entity)
       - ["entityEatingGrass" (entity)](#entityeatinggrass-entity)
+      - ["entityHandSwap" (entity)](#entityhandswap-entity)
       - ["entityWake" (entity)](#entitywake-entity)
       - ["entityEat" (entity)](#entityeat-entity)
       - ["entityCriticalEffect" (entity)](#entitycriticaleffect-entity)
@@ -187,6 +201,7 @@
       - ["entityEquip" (entity)](#entityequip-entity)
       - ["entitySleep" (entity)](#entitysleep-entity)
       - ["entitySpawn" (entity)](#entityspawn-entity)
+      - ["entityElytraFlew" (entity)](#entityelytraflew-entity)
       - ["itemDrop" (entity)](#itemdrop-entity)
       - ["playerCollect" (collector, collected)](#playercollect-collector-collected)
       - ["entityGone" (entity)](#entitygone-entity)
@@ -201,6 +216,8 @@
       - ["playerLeft" (player)](#playerleft-player)
       - ["blockUpdate" (oldBlock, newBlock)](#blockupdate-oldblock-newblock)
       - ["blockUpdate:(x, y, z)" (oldBlock, newBlock)](#blockupdatex-y-z-oldblock-newblock)
+      - ["blockEntityData" (block)](#blockentitydata-block)
+      - ["signOpen" (block)](#signopen-block)
       - ["blockPlaced" (oldBlock, newBlock)](#blockplaced-oldblock-newblock)
       - ["chunkColumnLoad" (point)](#chunkcolumnload-point)
       - ["chunkColumnUnload" (point)](#chunkcolumnunload-point)
@@ -209,10 +226,11 @@
       - ["noteHeard" (block, instrument, pitch)](#noteheard-block-instrument-pitch)
       - ["pistonMove" (block, isPulling, direction)](#pistonmove-block-ispulling-direction)
       - ["chestLidMove" (block, isOpen, block2)](#chestlidmove-block-isopen-block2)
-      - ["blockBreakProgressObserved" (block, destroyStage)](#blockbreakprogressobserved-block-destroystage)
-      - ["blockBreakProgressEnd" (block)](#blockbreakprogressend-block)
+      - ["blockBreakProgressObserved" (block, destroyStage, entity)](#blockbreakprogressobserved-block-destroystage-entity)
+      - ["blockBreakProgressEnd" (block, entity)](#blockbreakprogressend-block-entity)
       - ["diggingCompleted" (block)](#diggingcompleted-block)
       - ["diggingAborted" (block)](#diggingaborted-block)
+      - ["usedFirework" (fireworkEntityId)](#usedfirework-fireworkentityid)
       - ["move"](#move)
       - ["forcedMove"](#forcedmove)
       - ["mount"](#mount)
@@ -239,12 +257,13 @@
       - ["heldItemChanged" (heldItem)](#helditemchanged-helditem)
       - ["physicsTick" ()](#physicstick-)
       - ["chat:name" (matches)](#chatname-matches)
+      - ["particle"](#particle)
     - [Functions](#functions)
       - [bot.blockAt(point, extraInfos=true)](#botblockatpoint-extrainfostrue)
       - [bot.waitForChunksToLoad()](#botwaitforchunkstoload)
       - [bot.blockInSight(maxSteps, vectorLength)](#botblockinsightmaxsteps-vectorlength)
       - [bot.blockAtCursor(maxDistance=256)](#botblockatcursormaxdistance256)
-      - [bot.entityAtCursor(maxDistance = 3.5)](#botentityatcursormaxdistance35)
+      - [bot.entityAtCursor(maxDistance=3.5)](#botentityatcursormaxdistance35)
       - [bot.blockAtEntityCursor(entity=bot.entity, maxDistance=256)](#botblockatentitycursorentitybotentity-maxdistance256)
       - [bot.canSeeBlock(block)](#botcanseeblockblock)
       - [bot.findBlocks(options)](#botfindblocksoptions)
@@ -256,7 +275,7 @@
     - [Methods](#methods)
       - [bot.end(reason)](#botendreason)
       - [bot.quit(reason)](#botquitreason)
-      - [bot.tabComplete(str, [assumeCommand], [sendBlockInSight])](#bottabcompletestr-assumecommand-sendblockinsight)
+      - [bot.tabComplete(str, [assumeCommand], [sendBlockInSight], [timeout])](#bottabcompletestr-assumecommand-sendblockinsight-timeout)
       - [bot.chat(message)](#botchatmessage)
       - [bot.whisper(username, message)](#botwhisperusername-message)
       - [bot.chatAddPattern(pattern, chatType, description)](#botchataddpatternpattern-chattype-description)
@@ -277,12 +296,13 @@
       - [bot.getExplosionDamages(entity, position, radius, [rawDamages])](#botgetexplosiondamagesentity-position-radius-rawdamages)
       - [bot.lookAt(point, [force])](#botlookatpoint-force)
       - [bot.look(yaw, pitch, [force])](#botlookyaw-pitch-force)
-      - [bot.updateSign(block, text)](#botupdatesignblock-text)
+      - [bot.updateSign(block, text, back = false)](#botupdatesignblock-text-back--false)
       - [bot.equip(item, destination)](#botequipitem-destination)
       - [bot.unequip(destination)](#botunequipdestination)
       - [bot.tossStack(item)](#bottossstackitem)
       - [bot.toss(itemType, metadata, count)](#bottossitemtype-metadata-count)
-      - [bot.dig(block, [forceLook = true], [digFace])](#botdigblock-forcelook--true-digface)
+      - [bot.elytraFly()](#botelytrafly)
+      - [bot.dig(block, [forceLook], [digFace])](#botdigblock-forcelook-digface)
       - [bot.stopDigging()](#botstopdigging)
       - [bot.digTime(block)](#botdigtimeblock)
       - [bot.acceptResourcePack()](#botacceptresourcepack)
@@ -316,6 +336,7 @@
       - [bot.setCommandBlock(pos, command, [options])](#botsetcommandblockpos-command-options)
       - [bot.supportFeature(name)](#botsupportfeaturename)
       - [bot.waitForTicks(ticks)](#botwaitforticksticks)
+      - [bot.respawn()](#botrespawn)
     - [Lower level inventory methods](#lower-level-inventory-methods)
       - [bot.clickWindow(slot, mouseButton, mode)](#botclickwindowslot-mousebutton-mode)
       - [bot.putSelectedItemRange(start, end, window, slot)](#botputselecteditemrangestart-end-window-slot)
@@ -396,23 +417,41 @@ Entities represent players, mobs, and objects. They are emitted
 in many events, and you can access your own entity with `bot.entity`.
 See [prismarine-entity](https://github.com/PrismarineJS/prismarine-entity)
 
+#### Player Skin Data
+
+The skin data is stored in the `skinData` property of the player object, if present.
+
+```js
+// player.skinData
+{
+  url: 'http://textures.minecraft.net/texture/...',
+  model: 'slim', // or 'classic'
+  capeUrl: 'http://textures.minecraft.net/texture/...' // only if the player has a cape
+}
+```
+
 ### Block
 
 See [prismarine-block](https://github.com/PrismarineJS/prismarine-block)
 
-Also `block.blockEntity` is additional field with block entity data as `Object`
+Also `block.blockEntity` is additional field with block entity data as `Object`. The data in this varies between versions.
 ```js
-// sign.blockEntity
+// sign.blockEntity example from 1.19
 {
-  x: -53,
-  y: 88,
-  z: 66,
-  id: 'minecraft:sign', // 'Sign' in 1.10
-  Text1: { toString: Function }, // ChatMessage object
-  Text2: { toString: Function }, // ChatMessage object
-  Text3: { toString: Function }, // ChatMessage object
-  Text4: { toString: Function } // ChatMessage object
+  GlowingText: 0, // 0 for false, 1 for true
+  Color: 'black',
+  Text1: '{"text":"1"}',
+  Text2: '{"text":"2"}',
+  Text3: '{"text":"3"}',
+  Text4: '{"text":"4"}'
 }
+```
+
+Note if you want to get a sign's plain text, you can use [`block.getSignText()`](https://github.com/PrismarineJS/prismarine-block/blob/master/doc/API.md#sign) instead of unstable blockEntity data.
+```java
+> block = bot.blockAt(new Vec3(0, 60, 0)) // assuming a sign is here
+> block.getSignText()
+[ "Front text\nHello world", "Back text\nHello world" ]
 ```
 
 ### Biome
@@ -446,6 +485,8 @@ This function returns a `Promise`, with `void` as its argument when done withdra
  * `nbt` - match nbt data. `null` is do not match nbt.
 
 #### window.close()
+
+Close the `window`; returns the `Promise` from [bot.closeWindow(window)](#botclosewindowwindow).
 
 ### Recipe
 
@@ -725,6 +766,36 @@ Determines whether or not boss bar creates fog
 
 Determines what color the boss bar color is, one of `pink`, `blue`, `red`, `green`, `yellow`, `purple`, `white`
 
+### mineflayer.Particle
+
+#### Particle.id
+
+Particle ID, as defined in the [protocol](https://minecraft.wiki/w/Protocol#Particle)
+
+#### Particle.name
+
+Particle Name, as defined in the [protocol](https://minecraft.wiki/w/Protocol#Particle)
+
+#### Particle.position
+
+Vec3 instance of where the particle was created
+
+#### Particle.offset
+
+Vec3 instance of the particle's offset
+
+#### Particle.longDistanceRender
+
+Determines whether or not to force the rendering of a particle despite client particle settings and increases maximum view distance from 256 to 65536
+
+#### Particle.count
+
+Amount of particles created
+
+#### Particle.movementSpeed
+
+Particle speed in a random direction
+
 ## Bot
 
 ### mineflayer.createBot(options)
@@ -745,7 +816,9 @@ Create and return an instance of the class bot.
  * checkTimeoutInterval : default to `30*1000` (30s), check if keepalive received at that period, disconnect otherwise.
  * loadInternalPlugins : defaults to true
  * storageBuilder : an optional function, takes as argument version and worldName and return an instance of something with the same API as prismarine-provider-anvil. Will be used to save the world.
- * client : an instance of node-minecraft-protocol, if not specified, mineflayer makes it's own client. This can be used to enable using mineflayer through a proxy of many clients or a vanilla client and a mineflayer client.
+ * client : an instance of node-minecraft-protocol, if not specified, mineflayer makes its own client. This can be used to enable using mineflayer through a proxy of many clients or a vanilla client and a mineflayer client.
+ * brand : the brand name for the client to use. Defaults to vanilla. Can be used to simulate custom clients for servers that require it.
+ * respawn : when set to false disables bot from automatically respawning, defaults to true.
  * plugins : object : defaults to {}
    - pluginName : false : don't load internal plugin with given name ie. `pluginName`
    - pluginName : true : load internal plugin with given name ie. `pluginName` even though loadInternalplugins is set to false
@@ -758,6 +831,7 @@ Create and return an instance of the class bot.
  * [skinParts](#bot.settings.skinParts)
  * [enableTextFiltering](#bot.settings.enableTextFiltering)
  * [enableServerListing](#bot.settings.enableServerListing)
+ * [particleStatus](#bot.settings.particleStatus)
  * chatLengthLimit : the maximum amount of characters that can be sent in a single message. If this is not set, it will be 100 in < 1.11 and 256 in >= 1.11.
  * defaultChatPatterns: defaults to true, set to false to not add the patterns such as chat and whisper
 
@@ -775,15 +849,13 @@ A sync representation of the world. Check the doc at http://github.com/Prismarin
 
 Fires when a block updates. Both `oldBlock` and `newBlock` provided for
 comparison.
-
-Note that `oldBlock` may be `null`.
+`oldBlock` may be `null` with normal block updates.
 
 ##### world "blockUpdate:(x, y, z)" (oldBlock, newBlock)
 
 Fires for a specific point. Both `oldBlock` and `newBlock` provided for
-comparison.
-
-Note that `oldBlock` may be `null`.
+comparison. All listeners receive null for `oldBlock` and `newBlock` and get automatically removed when the world is unloaded.
+`oldBlock` may be `null` with normal block updates.
 
 
 #### bot.entity
@@ -813,6 +885,8 @@ Whether the bot is using the item that it's holding, for example eating food or 
 #### bot.game.levelType
 
 #### bot.game.dimension
+
+The bot's current dimension, such as `overworld`, `the_end` or `the_nether`.
 
 #### bot.game.difficulty
 
@@ -909,7 +983,7 @@ Default true, whether or not you receive color codes in chats from the server.
 
 #### bot.settings.viewDistance
 
-Can be a string listed below or a postive number.
+Can be a string listed below or a positive number.
 Choices:
  * `far` (default)
  * `normal`
@@ -944,6 +1018,8 @@ If you have a cape you can turn it off by setting this to false.
 Unused, defaults to false in Notchian (Vanilla) client.
 #### bot.settings.enableServerListing - boolean
 This setting is sent to the server to determine whether the player should show up in server listings
+#### bot.settings.particleStatus - string
+Particle status sent to the server (1.21.3+): `all`, `decreased` or `minimal`. Defaults to `all`.
 #### bot.experience.level
 
 #### bot.experience.points
@@ -970,12 +1046,16 @@ saturation of 5.0. Eating food increases the saturation as well as the food bar.
 
 #### bot.oxygenLevel
 
-Number in the range [0, 20] respresenting the number of water-icons known as oxygen level.
+Number in the range [0, 20] representing the number of water-icons known as oxygen level.
 
 #### bot.physics
 
 Edit these numbers to tweak gravity, jump speed, terminal velocity, etc.
 Do this at your own risk.
+
+#### bot.fireworkRocketDuration
+
+How many physics ticks worth of firework rocket boost are left.
 
 #### bot.simpleClick.leftMouse (slot)
 
@@ -1020,7 +1100,7 @@ Day of the world.
 
 Whether it is day or not.
 
-Based on whether the current time of day is between 13000 and 23000 ticks.
+Based on whether the current time of day is between 0 and 13000 ticks (day + sunset).
 
 #### bot.time.moonPhase
 
@@ -1068,7 +1148,7 @@ All scoreboards known to the bot in an object scoreboard displaySlot -> scoreboa
  * `belowName` - scoreboard placed in belowName
  * `sidebar` - scoreboard placed in sidebar
  * `list` - scoreboard placed in list
- * `0-18` - slots defined in [protocol](https://wiki.vg/Protocol#Display_Scoreboard)
+ * `0-18` - slots defined in [protocol](https://minecraft.wiki/w/Protocol#Display_Scoreboard)
 
 #### bot.teams
 
@@ -1106,26 +1186,36 @@ Only emitted when a player chats to you privately.
  * `jsonMsg` - unmodified JSON message from the server
  * `matches` - array of returned matches from regular expressions. May be null
 
-#### "actionBar" (jsonMsg)
+#### "actionBar" (jsonMsg, verified)
 
 Emitted for every server message which appears on the Action Bar.
 
  * `jsonMsg` - unmodified JSON message from the server
+ * `verified` -> null if non signed, true if signed and correct, false if signed and incorrect
 
-#### "message" (jsonMsg, position)
+#### "message" (jsonMsg, position, sender, verified)
 
 Emitted for every server message, including chats.
 
- * `jsonMsg` - unmodified JSON message from the server
+ * `jsonMsg` - [ChatMessage](https://github.com/PrismarineJS/prismarine-chat) object containing the formatted chat message. Might additionally have the following properties:
+   * unsigned - Unsigned ChatMessage object. Only present in 1.19.2+, and only when the server allows insecure chat and the server modified the chat message without the user's signature
 
  * `position` - (>= 1.8.1): position of Chat message can be
    * chat
    * system
    * game_info
 
-#### "messagestr" (message, messagePosition, jsonMsg)
+ * `sender` - UUID of sender if known (1.16+), else null
 
-Alias for the "message" event but it calls .toString() on the message object to get a string for the message before emitting.
+ * `verified` -> null if non signed, true if signed and correct, false if signed and incorrect
+
+#### "messagestr" (message, messagePosition, jsonMsg, sender, verified)
+
+Alias for the "message" event but it calls .toString() on the prismarine-message object to get a string for the message before emitting.
+
+ * `sender` - UUID of sender if known (1.16+), else null
+
+ * `verified` -> null if non signed, true if signed and correct, false if signed and incorrect
 
 #### "inject_allowed"
 Fires when the index file has been loaded, you can load mcData and plugins here but it's better to wait for "spawn" event.
@@ -1158,11 +1248,32 @@ Emitted when the server changes any of the game properties.
 
 Emitted when the server sends a resource pack.
 
-#### "title"
+#### "title" (title, type)
 
 Emitted when the server sends a title
 
- * `text` - title's text
+* `title` - title's text
+* `type` - title's type "subtitle", "title"
+
+#### "title_times" (fadeIn, stay, fadeOut)
+
+Emitted when the server sends a title times packet (i.e., when the fade-in, stay, and fade-out times for titles are set or updated).
+
+ * `fadeIn` - fade-in time in ticks (number)
+ * `stay` - stay time in ticks (number)
+ * `fadeOut` - fade-out time in ticks (number)
+
+Example:
+
+```js
+bot.on('title_times', (fadeIn, stay, fadeOut) => {
+  console.log(`Title times: fadeIn=${fadeIn}, stay=${stay}, fadeOut=${fadeOut}`)
+})
+```
+
+#### "title_clear"
+
+Emitted when the server clears all titles.
 
 #### "rain"
 
@@ -1221,6 +1332,7 @@ Fires when an attribute of an entity changes.
 #### "entityTamed" (entity)
 #### "entityShakingOffWater" (entity)
 #### "entityEatingGrass" (entity)
+#### "entityHandSwap" (entity)
 #### "entityWake" (entity)
 #### "entityEat" (entity)
 #### "entityCriticalEffect" (entity)
@@ -1230,6 +1342,10 @@ Fires when an attribute of an entity changes.
 #### "entityEquip" (entity)
 #### "entitySleep" (entity)
 #### "entitySpawn" (entity)
+#### "entityElytraFlew" (entity)
+
+An entity started elytra flying.
+
 #### "itemDrop" (entity)
 #### "playerCollect" (collector, collected)
 
@@ -1269,6 +1385,14 @@ Note that `oldBlock` may be `null`.
 comparison.
 
 Note that `oldBlock` may be `null`.
+
+#### "blockEntityData" (block)
+
+Fires when the server sends new block entity data for a block, for example when a sign's text is updated. `block` is the block at that position with the fresh data (may be `null` if the block is no longer loaded).
+
+#### "signOpen" (block)
+
+Fires when the server opens the sign editor, right after the bot places a sign. `block` is the placed sign (may be `null` if it is not loaded). Respond with [bot.updateSign](#botupdatesignblock-text-back--false).
 
 #### "blockPlaced" (oldBlock, newBlock)
 
@@ -1313,7 +1437,7 @@ Fires when a note block goes off somewhere.
  * `pitch`: The pitch of the note (between 0-24 inclusive where 0 is the
    lowest and 24 is the highest). More information about how the pitch values
    correspond to notes in real life are available on the
-   [official Minecraft wiki](http://www.minecraftwiki.net/wiki/Note_Block).
+   [official Minecraft wiki](http://minecraft.wiki/w/Note_Block).
 
 #### "pistonMove" (block, isPulling, direction)
 
@@ -1345,6 +1469,12 @@ This occurs whether the process was completed or aborted.
 #### "diggingAborted" (block)
 
  * `block` - the block that still exists
+
+#### "usedFirework" (fireworkEntityId)
+
+Fires when the bot uses a firework while elytra flying.
+
+ * `fireworkEntityId` - the entity id of the firework.
 
 #### "move"
 
@@ -1456,11 +1586,15 @@ Fires every tick if bot.physicsEnabled is set to true.
 
 Fires when the all of a chat pattern's regexs have matches
 
+#### "particle"
+
+Fires when a particle is created
+
 ### Functions
 
 #### bot.blockAt(point, extraInfos=true)
 
-Returns the block at `point` or `null` if that point is not loaded. If `extraInfos` set to true, also returns informations about signs, paintings and block entities (slower).
+Returns the block at `point` or `null` if that point is not loaded. If `extraInfos` set to true, also returns information about signs, paintings and block entities (slower).
 See `Block`.
 
 #### bot.waitForChunksToLoad()
@@ -1502,8 +1636,8 @@ Finds the closest blocks from the given point.
    - `point` - The start position of the search (center). Default is the bot position.
    - `matching` - A function that returns true if the given block is a match. Also supports this value being a block id or array of block ids.
    - `useExtraInfo` - To preserve backward compatibility can result in two behavior depending on the type
-      - **boolean** - Provide your `matching` function more data - noticeably slower aproach
-      - **function** - Creates two stage maching, if block passes `matching` function it is passed further to `useExtraInfo` with additional info
+      - **boolean** - Provide your `matching` function more data - noticeably slower approach
+      - **function** - Creates two stage matching, if block passes `matching` function it is passed further to `useExtraInfo` with additional info
    - `maxDistance` - The furthest distance for the search, defaults to 16.
    - `count` - Number of blocks to find before returning the search. Default to 1. Can return less if not enough blocks are found exploring the whole area.
 
@@ -1533,7 +1667,7 @@ with `metadata`.
 
 #### bot.recipesAll(itemType, metadata, craftingTable)
 
-The same as bot.recipesFor except that it does not check wether the bot has enough materials for the recipe.
+The same as bot.recipesFor except that it does not check whether the bot has enough materials for the recipe.
 
 #### bot.nearestEntity(match = (entity) => { return true })
 
@@ -1541,7 +1675,7 @@ Return the nearest entity to the bot, matching the function (default to all enti
 
 Example:
 ```js
-const cow = bot.nearestEntity(entity => entity.name.toLowerCase() === 'cow') // we use .toLowercase() because in 1.8 cow was capitalized, for newer versions that can be ommitted
+const cow = bot.nearestEntity(entity => entity.name.toLowerCase() === 'cow') // we use .toLowercase() because in 1.8 cow was capitalized, for newer versions that can be omitted
 ```
 
 ### Methods
@@ -1555,7 +1689,7 @@ End the connection with the server.
 
 Gracefully disconnect from the server with the given reason (defaults to 'disconnect.quitting').
 
-#### bot.tabComplete(str, [assumeCommand], [sendBlockInSight])
+#### bot.tabComplete(str, [assumeCommand], [sendBlockInSight], [timeout])
 
 This function returns a `Promise`, with `matches` as its argument upon completion.
 
@@ -1563,6 +1697,7 @@ Requests chat completion from the server.
  * `str` - String to complete.
  * `assumeCommand` - Field sent to server, defaults to false.
  * `sendBlockInSight` - Field sent to server, defaults to true. Set this option to false if you want more performance.
+ * `timeout` - Timeout in milliseconds, after which the function will return an empty array, defaults to 5000.
 
 #### bot.chat(message)
 
@@ -1588,25 +1723,29 @@ Adds a regex pattern to the bot's chat matching. Useful for bukkit servers where
 make an event that is called every time the pattern is matched to a message,
 the event will be called `"chat:name"`, with name being the name passed
 * `name` - the name used to listen for the event
-* `pattern` - regular expression to match to messages recieved
+* `pattern` - regular expression to match to messages received
 * `chatPatternOptions` - object
   * `repeat` - defaults to true, whether to listen for this event after the first match
   * `parse` - instead of returning the actual message that was matched, return the capture groups from the regex
-  * `deprecated` - (**unstable**) used by bot.chatAddPattern to keep compatability, likely to be removed
+  * `deprecated` - (**unstable**) used by bot.chatAddPattern to keep compatibility, likely to be removed
 
 returns a number which can be used with bot.removeChatPattern() to only delete this pattern
 
+- :eyes: cf. [examples/chat_parsing](https://github.com/PrismarineJS/mineflayer/blob/master/examples/chat_parsing.js#L17-L36)
+
 #### bot.addChatPatternSet(name, patterns, chatPatternOptions)
 
-make an event that is called every time all patterns havee been matched to messages,
+make an event that is called every time all patterns have been matched to messages,
 the event will be called `"chat:name"`, with name being the name passed
 * `name` - the name used to listen for the event
-* `patterns` - array of regular expression to match to messages recieved
+* `patterns` - array of regular expression to match to messages received
 * `chatPatternOptions` - object
   * `repeat` - defaults to true, whether to listen for this event after the first match
   * `parse` - instead of returning the actual message that was matched, return the capture groups from the regex
 
 returns a number which can be used with bot.removeChatPattern() to only delete this patternset
+
+- :eyes: cf. [examples/chat_parsing](https://github.com/PrismarineJS/mineflayer/blob/master/examples/chat_parsing.js#L17-L36)
 
 #### bot.removeChatPattern(name)
 
@@ -1672,7 +1811,7 @@ Checks if the given plugin is loaded (or scheduled to be loaded) on this bot.
 
 This function returns a `Promise`, with `void` as its argument upon completion.
 
-Sleep in a bed. `bedBlock` should be a `Block` instance which is a bed. 
+Sleep in a bed. `bedBlock` should be a `Block` instance which is a bed.
 
 #### bot.isABed(bedBlock)
 
@@ -1682,7 +1821,7 @@ Return true if `bedBlock` is a bed
 
 This function returns a `Promise`, with `void` as its argument upon completion.
 
-Get out of bed. 
+Get out of bed.
 
 #### bot.setControlState(control, state)
 
@@ -1735,9 +1874,9 @@ Set the direction your head is facing.
    are looking, such as for dropping items or shooting arrows. This is not
    needed for client-side calculation such as walking direction.
 
-#### bot.updateSign(block, text)
+#### bot.updateSign(block, text, back = false)
 
-Changes the text on the sign.
+Changes the text on the sign. On Minecraft 1.20 and newer, a truthy `back` will try setting the text on the back of a sign (only visible if not attached to a wall).
 
 #### bot.equip(item, destination)
 
@@ -1776,7 +1915,12 @@ This function returns a `Promise`, with `void` as its argument once tossing is c
    to match any metadata
  * `count` - how many you want to toss. `null` is an alias for `1`.
 
-#### bot.dig(block, [forceLook = true], [digFace])
+#### bot.elytraFly()
+
+This function returns a `Promise`, with `void` as its argument once activating
+elytra flight is complete. It will throw an Error if it fails.
+
+#### bot.dig(block, [forceLook], [digFace])
 
 This function returns a `Promise`, with `void` as its argument when the block is broken or you are interrupted.
 
@@ -1788,7 +1932,7 @@ dig any other blocks until the block has been broken, or you call
 `bot.stopDigging()`.
 
  * `block` - the block to start digging into
- * `forceLook` - (optional) if true, look at the block and start mining instantly. If false, the bot will slowly turn to the block to mine. Additionally, this can be assigned to 'ignore' to prevent the bot from moving it's head at all. Also, this can be assigned to 'raycast' to raycast from the bots head to place where the bot is looking.
+ * `forceLook` - (optional) if true, the bot snaps its head to the block and starts mining instantly. If false or omitted, the bot turns its head to the block at its normal look rate and waits for the turn to finish before digging. Can also be assigned 'ignore' to prevent the bot from moving its head at all.
  * `digFace` - (optional) Default is 'auto' looks at the center of the block and mines the top face. Can also be a vec3 vector
  of the face the bot should be looking at when digging the block. For example: ```vec3(0, 1, 0)``` when mining the top. Can also be 'raycast' raycast checks if there is a face visible by the bot and mines that face. Useful for servers with anti cheat.
 
@@ -1811,6 +1955,7 @@ Denies resource pack.
 #### bot.placeBlock(referenceBlock, faceVector)
 
 This function returns a `Promise`, with `void` as its argument when the server confirms that the block has indeed been placed.
+It rejects as soon as the server refuses the placement (for example because an entity is in the way).
 
  * `referenceBlock` - the block you want to place a new block next to
  * `faceVector` - one of the six cardinal directions, such as `new Vec3(0, 1, 0)` for the top face,
@@ -1871,7 +2016,9 @@ Use fishing rod
 
 #### bot.activateItem(offHand=false)
 
-Activates the currently held item. This is how you eat, shoot bows, throw an egg, etc.
+Activates the currently held item. This is how you eat, shoot bows, throw an
+egg, activate firework rockets, etc.
+
 Optional parameter is `false` for main hand and `true` for off hand.
 
 #### bot.deactivateItem()
@@ -1997,11 +2144,15 @@ All options attributes are false by default, except mode which is 2 (as to repli
 
 This can be used to check is a specific feature is available in the current Minecraft version. This is usually only required for handling version-specific functionality.
 
-The list of available features can be found inside the [./lib/features.json](https://github.com/PrismarineJS/mineflayer/blob/master/lib/features.json) file.
+The list of available features can be found inside the [features.json](https://github.com/PrismarineJS/minecraft-data/blob/master/data/pc/common/features.json) file.
 
 #### bot.waitForTicks(ticks)
 
 This is a promise-based function that waits for a given number of in-game ticks to pass before continuing. This is useful for quick timers that need to function with specific timing, regardless of the given physics tick speed of the bot. This is similar to the standard Javascript setTimeout function, but runs on the physics timer of the bot specifically.
+
+#### bot.respawn()
+
+When `respawn` option is disabled, you can call this method manually to respawn.
 
 ### Lower level inventory methods
 
@@ -2010,10 +2161,22 @@ These are lower level methods for the inventory, they can be useful sometimes bu
 #### bot.clickWindow(slot, mouseButton, mode)
 
 This function returns a `Promise`, with `void` as its argument upon completion.
-  
-The only valid mode option at the moment is 0. Shift clicking or mouse draging is not implemented.
 
-Click on the current window. See details at https://wiki.vg/Protocol#Click_Window
+mode support:
+  - stable:
+    - mouse clicks (0)
+
+  - experimental:
+    - shift clicks (1)
+    - number clicks (2)
+    - middle clicks (3)
+    - drop clicks (4)
+
+  - unimplemented:
+    - drag clicks (5)
+    - double clicks (6)
+
+Click on the current window. See details at https://minecraft.wiki/w/Protocol#Click_Container
 
 Prefer using bot.simpleClick.*
 
@@ -2031,7 +2194,9 @@ Put the item at `slot` in the inventory.
 
 #### bot.closeWindow(window)
 
-Close the `window`.
+This function returns a `Promise`, with `void` as its argument once the server has acknowledged the close.
+
+Close the `window`. On 1.16.5 and below the server only learns which inventory slots the window changed on its next tick, so await this before anything else (a command, another player) touches those slots.
 
 #### bot.transfer(options)
 
@@ -2139,4 +2304,4 @@ Note that while flying, `bot.entity.velocity` will not be accurate.
 
 #### bot.creative.stopFlying()
 
-Restores `bot.physics.gravity` to it's original value.
+Restores `bot.physics.gravity` to its original value.

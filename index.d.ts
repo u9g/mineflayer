@@ -8,6 +8,9 @@ import { Recipe } from 'prismarine-recipe'
 import { Block } from 'prismarine-block'
 import { Entity } from 'prismarine-entity'
 import { ChatMessage } from 'prismarine-chat'
+import { world } from 'prismarine-world'
+import { Registry } from 'prismarine-registry'
+import { IndexedData } from 'minecraft-data'
 
 export function createBot (options: { client: Client } & Partial<BotOptions>): Bot
 export function createBot (options: BotOptions): Bot
@@ -24,13 +27,16 @@ export interface BotOptions extends ClientOptions {
   difficulty?: number
   chatLengthLimit?: number
   physicsEnabled?: boolean
+  /** @default 4 */
+  maxCatchupTicks?: number
   client?: Client
   brand?: string
   defaultChatPatterns?: boolean
+  respawn?: boolean
 }
 
 export type ChatLevel = 'enabled' | 'commandsOnly' | 'disabled'
-export type ViewDistance = 'far' | 'normal' | 'short' | 'tiny'
+export type ViewDistance = 'far' | 'normal' | 'short' | 'tiny' | number
 export type MainHands = 'left' | 'right'
 
 export interface PluginOptions {
@@ -39,7 +45,7 @@ export interface PluginOptions {
 
 export type Plugin = (bot: Bot, options: BotOptions) => void
 
-interface BotEvents {
+export interface BotEvents {
   chat: (
     username: string,
     message: string,
@@ -61,10 +67,11 @@ interface BotEvents {
   unmatchedMessage: (stringMsg: string, jsonMsg: ChatMessage) => Promise<void> | void
   inject_allowed: () => Promise<void> | void
   login: () => Promise<void> | void
+  /** When `respawn` option is disabled, you can call this method manually to respawn. */
   spawn: () => Promise<void> | void
   respawn: () => Promise<void> | void
   game: () => Promise<void> | void
-  title: (text: string) => Promise<void> | void
+  title: (text: string, type: "subtitle" | "title") => Promise<void> | void
   rain: () => Promise<void> | void
   time: () => Promise<void> | void
   kicked: (reason: string, loggedIn: boolean) => Promise<void> | void
@@ -74,12 +81,13 @@ interface BotEvents {
   health: () => Promise<void> | void
   breath: () => Promise<void> | void
   entitySwingArm: (entity: Entity) => Promise<void> | void
-  entityHurt: (entity: Entity) => Promise<void> | void
+  entityHurt: (entity: Entity, source: Entity) => Promise<void> | void
   entityDead: (entity: Entity) => Promise<void> | void
   entityTaming: (entity: Entity) => Promise<void> | void
   entityTamed: (entity: Entity) => Promise<void> | void
   entityShakingOffWater: (entity: Entity) => Promise<void> | void
   entityEatingGrass: (entity: Entity) => Promise<void> | void
+  entityHandSwap: (entity: Entity) => Promise<void> | void
   entityWake: (entity: Entity) => Promise<void> | void
   entityEat: (entity: Entity) => Promise<void> | void
   entityCriticalEffect: (entity: Entity) => Promise<void> | void
@@ -89,6 +97,8 @@ interface BotEvents {
   entityEquip: (entity: Entity) => Promise<void> | void
   entitySleep: (entity: Entity) => Promise<void> | void
   entitySpawn: (entity: Entity) => Promise<void> | void
+  entityElytraFlew: (entity: Entity) => Promise<void> | void
+  usedFirework: () => Promise<void> | void
   itemDrop: (entity: Entity) => Promise<void> | void
   playerCollect: (collector: Entity, collected: Entity) => Promise<void> | void
   entityAttributes: (entity: Entity) => Promise<void> | void
@@ -103,7 +113,9 @@ interface BotEvents {
   playerUpdated: (player: Player) => Promise<void> | void
   playerLeft: (entity: Player) => Promise<void> | void
   blockUpdate: (oldBlock: Block | null, newBlock: Block) => Promise<void> | void
-  'blockUpdate:(x, y, z)': (oldBlock: Block | null, newBlock: Block) => Promise<void> | void
+  'blockUpdate:(x, y, z)': (oldBlock: Block | null, newBlock: Block | null) => Promise<void> | void
+  blockEntityData: (block: Block | null) => Promise<void> | void
+  signOpen: (block: Block | null) => Promise<void> | void
   chunkColumnLoad: (entity: Vec3) => Promise<void> | void
   chunkColumnUnload: (entity: Vec3) => Promise<void> | void
   soundEffectHeard: (
@@ -121,7 +133,7 @@ interface BotEvents {
   ) => Promise<void> | void
   noteHeard: (block: Block, instrument: Instrument, pitch: number) => Promise<void> | void
   pistonMove: (block: Block, isPulling: number, direction: number) => Promise<void> | void
-  chestLidMove: (block: Block, isOpen: number) => Promise<void> | void
+  chestLidMove: (block: Block, isOpen: number, block2: Block | null) => Promise<void> | void
   blockBreakProgressObserved: (block: Block, destroyStage: number) => Promise<void> | void
   blockBreakProgressEnd: (block: Block) => Promise<void> | void
   diggingCompleted: (block: Block) => Promise<void> | void
@@ -148,9 +160,19 @@ interface BotEvents {
   teamUpdated: (team: Team) => Promise<void> | void
   teamMemberAdded: (team: Team) => Promise<void> | void
   teamMemberRemoved: (team: Team) => Promise<void> | void
+  bossBarCreated: (bossBar: BossBar) => Promise<void> | void
   bossBarDeleted: (bossBar: BossBar) => Promise<void> | void
   bossBarUpdated: (bossBar: BossBar) => Promise<void> | void
-  resourcePack: (url: string, hash: string) => Promise<void> | void
+  resourcePack: (url: string, hash?: string, uuid?: string) => Promise<void> | void
+  heldItemChanged: (newItem: Item | null) => Promise<void> | void
+  particle: (particle: Particle) => Promise<void> | void
+}
+
+export interface CommandBlockOptions {
+  mode: number,
+  trackOutput: boolean,
+  conditional: boolean,
+  alwaysActive: boolean
 }
 
 export interface Bot extends TypedEmitter<BotEvents> {
@@ -160,6 +182,7 @@ export interface Bot extends TypedEmitter<BotEvents> {
   version: string
   entity: Entity
   entities: { [id: string]: Entity }
+  fireworkRocketDuration: number
   spawnPoint: Vec3
   game: GameState
   player: Player
@@ -177,24 +200,27 @@ export interface Bot extends TypedEmitter<BotEvents> {
   physicsEnabled: boolean
   time: Time
   quickBarSlot: number
-  inventory: Window
+  inventory: Window<StorageEvents>
   targetDigBlock: Block
   isSleeping: boolean
   scoreboards: { [name: string]: ScoreBoard }
   scoreboard: { [slot in DisplaySlot]: ScoreBoard }
+  teams: { [name: string]: Team }
   teamMap: { [name: string]: Team }
   controlState: ControlStateStatus
   creative: creativeMethods
-  world: any
+  world: world.WorldSync
   _client: Client
   heldItem: Item | null
+  usingHeldItem: boolean
   currentWindow: Window | null
   simpleClick: simpleClick
   tablist: Tablist
+  registry: Registry
 
   connect: (options: BotOptions) => void
 
-  supportFeature: (feature: string) => boolean
+  supportFeature: IndexedData['supportFeature']
 
   end: (reason?: string) => void
 
@@ -231,7 +257,8 @@ export interface Bot extends TypedEmitter<BotEvents> {
   tabComplete: (
     str: string,
     assumeCommand?: boolean,
-    sendBlockInSight?: boolean
+    sendBlockInSight?: boolean,
+    timeout?: number
   ) => Promise<string[]>
 
   chat: (message: string) => void
@@ -254,6 +281,8 @@ export interface Bot extends TypedEmitter<BotEvents> {
 
   wake: () => Promise<void>
 
+  elytraFly: () => Promise<void>
+
   setControlState: (control: ControlState, state: boolean) => void
 
   getControlState: (control: ControlState) => boolean
@@ -270,7 +299,7 @@ export interface Bot extends TypedEmitter<BotEvents> {
     force?: boolean
   ) => Promise<void>
 
-  updateSign: (block: Block, text: string) => void
+  updateSign: (block: Block, text: string, back?: boolean) => void
 
   equip: (
     item: Item | number,
@@ -338,7 +367,7 @@ export interface Bot extends TypedEmitter<BotEvents> {
     pages: string[]
   ) => Promise<void>
 
-  openContainer: (chest: Block | Entity, direction?: Vec3, cursorPos?: Vec3) => Promise<Chest | Furnace | Dispenser>
+  openContainer: (chest: Block | Entity, direction?: Vec3, cursorPos?: Vec3) => Promise<Chest | Dispenser>
 
   openChest: (chest: Block | Entity, direction?: number, cursorPos?: Vec3) => Promise<Chest>
 
@@ -360,7 +389,9 @@ export interface Bot extends TypedEmitter<BotEvents> {
     times?: number
   ) => Promise<void>
 
-  setCommandBlock: (pos: Vec3, command: string, trackOutput: boolean) => void
+
+
+  setCommandBlock: (pos: Vec3, command: string, options: CommandBlockOptions) => void
 
   clickWindow: (
     slot: number,
@@ -377,7 +408,7 @@ export interface Bot extends TypedEmitter<BotEvents> {
 
   putAway: (slot: number) => Promise<void>
 
-  closeWindow: (window: Window) => void
+  closeWindow: (window: Window) => Promise<void>
 
   transfer: (options: TransferOptions) => Promise<void>
 
@@ -396,6 +427,7 @@ export interface Bot extends TypedEmitter<BotEvents> {
 
   waitForChunksToLoad: () => Promise<void>
 
+  entityAtCursor: (maxDistance?: number) => Entity | null
   nearestEntity: (filter?: (entity: Entity) => boolean) => Entity | null
 
   waitForTicks: (ticks: number) => Promise<void>
@@ -411,6 +443,8 @@ export interface Bot extends TypedEmitter<BotEvents> {
   acceptResourcePack: () => void
 
   denyResourcePack: () => void
+
+  respawn: () => void
 }
 
 export interface simpleClick {
@@ -435,6 +469,7 @@ export interface GameState {
   dimension: Dimension
   difficulty: Difficulty
   maxPlayers: number
+  serverBrand: string
 }
 
 export type LevelType =
@@ -446,7 +481,7 @@ export type LevelType =
   | 'buffet'
   | 'default_1_1'
 export type GameMode = 'survival' | 'creative' | 'adventure' | 'spectator'
-export type Dimension = 'minecraft:nether' | 'minecraft:overworld' | 'minecraft:end'
+export type Dimension = 'the_nether' | 'overworld' | 'the_end'
 export type Difficulty = 'peaceful' | 'easy' | 'normal' | 'hard'
 
 export interface Player {
@@ -456,6 +491,17 @@ export interface Player {
   gamemode: number
   ping: number
   entity: Entity
+  skinData: SkinData | undefined
+  profileKeys?: {
+    publicKey: Buffer
+    signature: Buffer
+  }
+}
+
+export interface SkinData {
+  url: string
+  model: string | null
+  capeUrl?: string
 }
 
 export interface ChatPattern {
@@ -499,6 +545,7 @@ export interface PhysicsOptions {
   playerHeight: number
   jumpSpeed: number
   yawSpeed: number
+  pitchSpeed: number
   sprintSpeed: number
   maxGroundSpeedSoulSand: number
   maxGroundSpeedWater: number
@@ -551,7 +598,7 @@ export interface FindBlockOptions {
   matching: number | number[] | ((block: Block) => boolean)
   maxDistance?: number
   count?: number
-  useExtraInfo?: boolean
+  useExtraInfo?: boolean | ((block: Block) => boolean)
 }
 
 export type EquipmentDestination = 'hand' | 'head' | 'torso' | 'legs' | 'feet' | 'off-hand'
@@ -560,6 +607,7 @@ export interface TransferOptions {
   window: Window
   itemType: number
   metadata: number | null
+  count?: number,
   sourceStart: number
   sourceEnd: number
   destStart: number
@@ -606,7 +654,7 @@ export class Painting {
 interface StorageEvents {
   open: () => void
   close: () => void
-  updateSlot: (oldItem: Item | null, newItem: Item) => void
+  updateSlot: (slot: number, oldItem: Item | null, newItem: Item | null) => void
 }
 
 interface FurnaceEvents extends StorageEvents {
@@ -617,12 +665,10 @@ interface ConditionalStorageEvents extends StorageEvents {
   ready: () => void
 }
 
-export class Chest extends (EventEmitter as new () => TypedEmitter<StorageEvents>) {
-  window: object | /* prismarine-windows ChestWindow */ null
-
+export class Chest extends Window<StorageEvents> {
   constructor ();
 
-  close (): void;
+  close (): Promise<void>;
 
   deposit (
     itemType: number,
@@ -635,19 +681,15 @@ export class Chest extends (EventEmitter as new () => TypedEmitter<StorageEvents
     metadata: number | null,
     count: number | null
   ): Promise<void>;
-
-  count (itemType: number, metadata: number | null): number;
-
-  items (): Item[];
 }
 
-export class Furnace extends (EventEmitter as new () => TypedEmitter<FurnaceEvents>) {
+export class Furnace extends Window<FurnaceEvents> {
   fuel: number
   progress: number
 
   constructor ();
 
-  close (): void;
+  close (): Promise<void>;
 
   takeInput (): Promise<Item>;
 
@@ -674,10 +716,10 @@ export class Furnace extends (EventEmitter as new () => TypedEmitter<FurnaceEven
   outputItem (): Item;
 }
 
-export class Dispenser extends (EventEmitter as new () => TypedEmitter<StorageEvents>) {
+export class Dispenser extends Window<StorageEvents> {
   constructor ();
 
-  close (): void;
+  close (): Promise<void>;
 
   deposit (
     itemType: number,
@@ -690,18 +732,14 @@ export class Dispenser extends (EventEmitter as new () => TypedEmitter<StorageEv
     metadata: number | null,
     count: number | null
   ): Promise<void>;
-
-  count (itemType: number, metadata: number | null): number;
-
-  items (): Item[];
 }
 
-export class EnchantmentTable extends (EventEmitter as new () => TypedEmitter<ConditionalStorageEvents>) {
+export class EnchantmentTable extends Window<ConditionalStorageEvents> {
   enchantments: Enchantment[]
 
   constructor ();
 
-  close (): void;
+  close (): Promise<void>;
 
   targetItem (): Item;
 
@@ -723,14 +761,15 @@ export class Anvil {
 
 export interface Enchantment {
   level: number
+  expected: { enchant: number, level: number }
 }
 
-export class Villager extends (EventEmitter as new () => TypedEmitter<ConditionalStorageEvents>) {
+export class Villager extends Window<ConditionalStorageEvents> {
   trades: VillagerTrade[]
 
   constructor ();
 
-  close (): void;
+  close (): Promise<void>;
 }
 
 export interface VillagerTrade {
@@ -758,7 +797,7 @@ export class ScoreBoard {
 
   setTitle (title: string): void;
 
-  add (name: string, value: number, displayName: ChatMessage): ScoreBoardItem;
+  add(name: string, value: number): ScoreBoardItem;
 
   remove (name: string): ScoreBoardItem;
 }
@@ -770,6 +809,7 @@ export interface ScoreBoardItem {
 }
 
 export class Team {
+  team: string
   name: ChatMessage
   friendlyFire: number
   nameTagVisibility: string
@@ -777,8 +817,10 @@ export class Team {
   color: string
   prefix: ChatMessage
   suffix: ChatMessage
+  memberMap: { [name: string]: '' }
+  members: string[]
 
-  constructor (packet: object);
+  constructor(team: string, name: string, friendlyFire: boolean, nameTagVisibility: string, collisionRule: string, formatting: number, prefix: string, suffix: string);
 
   parseMessage (value: string): ChatMessage;
 
@@ -820,6 +862,7 @@ export class BossBar {
   color: 'pink' | 'blue' | 'red' | 'green' | 'yellow' | 'purple' | 'white'
   shouldDarkenSky: boolean
   isDragonBar: boolean
+  createFog: boolean
   shouldCreateFog: boolean
 
   constructor (
@@ -832,7 +875,27 @@ export class BossBar {
   );
 }
 
-export let supportedVersions: string[]
+export class Particle {
+  id: number
+  position: Vec3
+  offset: Vec3
+  count: number
+  movementSpeed: number
+  longDistanceRender: boolean
+  static fromNetwork(packet: Object): Particle
+
+  constructor(
+    id: number,
+    position: Vec3,
+    offset: Vec3,
+    count?: number,
+    movementSpeed?: number,
+    longDistanceRender?: boolean
+  );
+}
+
 export let testedVersions: string[]
+export let latestSupportedVersion: string
+export let oldestSupportedVersion: string
 
 export function supportFeature (feature: string, version: string): boolean

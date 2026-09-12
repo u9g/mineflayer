@@ -417,7 +417,7 @@ bot.once('spawn', () => {
 
 ### Listening for an event
 
-The bot object has many useful [events](http://mineflayer.prismarine.js.org/#/api?id=events).
+The bot object has many useful [events](http://prismarinejs.github.io/mineflayer/#/api?id=events).
 You can listen for an event by using either `bot.on()` method or `bot.once()` method of the bot object, which takes the name of an event and a function.
 To remove specific listener you can use `bot.removeListener()` method.
 
@@ -428,7 +428,7 @@ To remove specific listener you can use `bot.removeListener()` method.
 - `bot.removeListener(eventName, listener)`
   Removes the specified `listener` for the event named `eventName`. In order to use this you either need to define your function with `function myNamedFunc() {}` or put your function in a variable with `const myNamedFunc = () => {}`. You can then use `myNamedFunc` in the listener argument.
 
-Not only bot object, [`Chest`](http://mineflayer.prismarine.js.org/#/api?id=mineflayerchest), [`Furnace`](http://mineflayer.prismarine.js.org/#/api?id=mineflayerfurnace), [`Dispenser`](http://mineflayer.prismarine.js.org/#/api?id=mineflayerdispenser), [`EnchantmentTable`](http://mineflayer.prismarine.js.org/#/api?id=mineflayerenchantmenttable), [`Villager`](http://mineflayer.prismarine.js.org/#/api?id=mineflayervillager) object also have their own events!
+Not only bot object, [`Chest`](http://prismarinejs.github.io/mineflayer/#/api?id=mineflayerchest), [`Furnace`](http://prismarinejs.github.io/mineflayer/#/api?id=mineflayerfurnace), [`Dispenser`](http://prismarinejs.github.io/mineflayer/#/api?id=mineflayerdispenser), [`EnchantmentTable`](http://prismarinejs.github.io/mineflayer/#/api?id=mineflayerenchantmenttable), [`Villager`](http://prismarinejs.github.io/mineflayer/#/api?id=mineflayervillager) object also have their own events!
 
 ### Promises
 A [promise](https://nodejs.dev/learn/understanding-javascript-promises) is a function that you can use the `await` variable to wait on until it's job is complete. (you can omit the await to not wait for results)
@@ -453,7 +453,7 @@ The function could also be called when an error occurs.
 
 Below is an example of a bot that will craft oak logs into oak planks and then into sticks.
 
-Incorect approach ❌:
+Incorrect approach ❌:
 
 ```js
 function craft (bot) {
@@ -557,8 +557,8 @@ In general, you'll want to use `for of` instead of `for in` so make sure you don
 
 ### Creating an event from chat
 
-You can create your own event from chat using [`bot.chatAddPattern()`](http://mineflayer.prismarine.js.org/#/api?id=botchataddpatternpattern-chattype-description) method. Useful for Bukkit servers where the chat format changes a lot.
-[`bot.chatAddPattern()`](http://mineflayer.prismarine.js.org/#/api?id=botchataddpatternpattern-chattype-description) method takes three arguments :
+You can create your own event from chat using [`bot.addChatPattern()`](http://prismarinejs.github.io/mineflayer/#/api?id=botaddchatpatternname-pattern-chatpatternoptions) method. Useful for Bukkit servers where the chat format changes a lot.
+[`bot.addChatPattern()`](http://prismarinejs.github.io/mineflayer/#/api?id=botaddchatpatternname-pattern-chatpatternoptions) method takes three arguments :
 
 - `pattern` - regular expression (regex) to match chat
 - `chatType` - the event the bot emits when the pattern matches. e.g. "chat" or "whisper"
@@ -575,9 +575,9 @@ Examples :
 Here we're creating a bot that answer 'hello' from the other player.
 
 ```js
-bot.chatAddPattern(
-  /(helo|hello|Hello)/,
+bot.addChatPattern(
   'hello',
+  /(helo|hello|Hello)/,
   'Someone says hello'
 )
 
@@ -585,7 +585,7 @@ const hi = () => {
   bot.chat('Hi!')
 }
 
-bot.on('hello', hi)
+bot.on('chat:hello', hi)
 ```
 
 #### Custom chat
@@ -601,7 +601,7 @@ Custom chat example:
 ```
 
 ```js
-bot.chatAddPattern(
+bot.addChatPattern(
   /^\[(.+)\] (\S+) > (.+)$/,
   'my_chat_event',
   'Custom chat event'

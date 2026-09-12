@@ -2,6 +2,10 @@
 
 This Frequently Asked Question document is meant to help people for the most common things.
 
+### I get an error (ie. protocol/data) when bot is trying to connect to minecraft server
+
+Make sure the Minecraft server version is supported (cf. root readme), else you should retry using one of the [mineflayer tested versions](../lib/version.js).
+
 ### I get an error when trying to login with a microsoft account.
 
 Make sure the email you entered into the username option in createBot can be used to login to `minecraft.net` using the 'Login with Microsoft' button.
@@ -22,7 +26,7 @@ client.on('end', () => {})
 
 Spigot servers, in particular some plugins, use custom chat formats, you need to parse it with a custom regex / parser.
 Read and adapt [chat_parsing.js](https://github.com/PrismarineJS/mineflayer/blob/master/examples/chat_parsing.js) to make it work for your particular
-chat plugin. Also read http://mineflayer.prismarine.js.org/#/tutorial?id=custom-chat
+chat plugin. Also read http://prismarinejs.github.io/mineflayer/#/tutorial?id=custom-chat
 
 ### How can I collect info from an custom plugin in chat ?
 
@@ -154,6 +158,10 @@ connect: (client) => {
   ```
   `socks` is declared with `const socks = require('socks').SocksClient` and uses [this](https://www.npmjs.com/package/socks) package.
   Some servers might reject the connection. If that happens try adding `fakeHost: MC_SERVER_ADDRESS` to your createBot options.
+
+### The bot gets kicked with "An internal error occurred during your connection" when transferred between servers via a Velocity/BungeeCord proxy
+
+This affected Minecraft 1.20.2+ and is fixed in current mineflayer: the bot no longer sends movement packets while the proxy puts it through the destination server's configuration phase, and resource packs are accepted automatically during that phase. Update mineflayer to the latest version.
   
 # Common Errors
 
