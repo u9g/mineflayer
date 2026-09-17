@@ -10,7 +10,7 @@
 # may flood the chat, feel free to check them out for other purposes though.
 #
 # This bot also replies to some specific chat messages so you can ask him
-# a few informations while you are in game.
+# a few information while you are in game.
 # ===========================================================================
 import sys, re
 from javascript import require, On, Once, console
@@ -30,11 +30,10 @@ username = sys.argv[3] if len(sys.argv) > 3 else "boat"
 bot = mineflayer.createBot({
     "host": host,
     "port": port,
-    "username": username,
-    "port": port
+    "username": username
 })
 
-Item = require("prismarine-item")(bot.version)
+Item = require("prismarine-item")(bot.registry)
 
 
 @On(bot, "chat")
@@ -224,12 +223,12 @@ def playerCollect(this, collector, collected):
 def entitySpawn(this, entity):
     if entity.type == "mob":
         p = entity.position
-        console.log(f"Look out! A {entity.mobType} spawned at {p.toString()}")
+        console.log(f"Look out! A {entity.displayName} spawned at {p.toString()}")
     elif entity.type == "player":
         bot.chat(f"Look who decided to show up: {entity.username}")
     elif entity.type == "object":
         p = entity.position
-        console.log(f"There's a {entity.objectType} at {p.toString()}")
+        console.log(f"There's a {entity.displayName} at {p.toString()}")
     elif entity.type == "global":
         bot.chat("Ooh lightning!")
     elif entity.type == "orb":
@@ -239,7 +238,7 @@ def entitySpawn(this, entity):
 @On(bot, "entityHurt")
 def entityHurt(this, entity):
     if entity.type == "mob":
-        bot.chat(f"Haha! The ${entity.mobType} got hurt!")
+        bot.chat(f"Haha! The ${entity.displayName} got hurt!")
     elif entity.type == "player":
         if entity.username in bot.players:
             ping = bot.players[entity.username].ping
@@ -279,13 +278,13 @@ def entityEat(this, entity):
 @On(bot, "entityAttach")
 def entityAttach(this, entity, vehicle):
     if entity.type == "player" and vehicle.type == "object":
-        print(f"Sweet, {entity.username} is riding that {vehicle.objectType}")
+        print(f"Sweet, {entity.username} is riding that {vehicle.displayName}")
 
 
 @On(bot, "entityDetach")
 def entityDetach(this, entity, vehicle):
     if entity.type == "player" and vehicle.type == "object":
-        print(f"Lame, {entity.username} stopped riding the {vehicle.objectType}")
+        print(f"Lame, {entity.username} stopped riding the {vehicle.displayName}")
 
 
 @On(bot, "entityEquipmentChange")
