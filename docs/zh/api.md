@@ -153,7 +153,7 @@
       - ["respawn"](#respawn)
       - ["game"](#game)
       - ["resourcePack" (url, hash)](#resourcepack-url-hash)
-      - ["title"](#title)
+      - ["title" (title, type)](#title-title-type)
       - ["rain"](#rain)
       - ["weatherUpdate"](#weatherupdate)
       - ["time"](#time)
@@ -737,8 +737,8 @@ Determines what color the boss bar color is,  `pink`, `blue`, `red`, `green`, `y
  * port : 端口，默认为 25565
  * password : 可以省略 (如果token也被省略，那么它将尝试以离线模式连接)
  * host : 默认为 localhost
- * version : 默认为自动猜测服务器的版本。值示例：“1.12.2”
- * auth : 默认为“mojang”，也可以是“microsoft”
+ * version : 默认为自动猜测服务器的版本。值示例："1.12.2"
+ * auth : 默认为"mojang"，也可以是"microsoft"
  * clientToken : 如果给定密码，则生成
  * accessToken : 如果给定密码，则生成
  * logErrors : 默认情况下为true，捕获错误并记录它们
@@ -1041,7 +1041,7 @@ All scoreboards known to the bot in an object scoreboard displaySlot -> scoreboa
  * `belowName` - scoreboard placed in belowName
  * `sidebar` - scoreboard placed in sidebar
  * `list` - scoreboard placed in list
- * `0-18` - slots defined in [protocol](https://wiki.vg/Protocol#Display_Scoreboard)
+ * `0-18` - slots defined in [protocol](https://minecraft.wiki/w/Protocol#Display_Scoreboard)
 
 #### bot.teams
 
@@ -1127,11 +1127,12 @@ Emitted for every server message, including chats.
 
 当服务器发送资源包时触发
 
-#### "title"
+#### "title" (title, type)
 
 当服务器发送标题时触发
 
- * `text` - 标题文本
+ * `title` - 标题文本
+ * `type` - 标题类型 "subtitle" 或 "title"
 
 #### "rain"
 
@@ -1150,11 +1151,11 @@ If you join a server where it is already raining, this event will fire.
 
 当bot从服务器被踢出时触发
 
- `reason`是一条解释你被踢的原因的聊天信息. 
+ `reason`是一条解释你被踢的原因的聊天信息.
 
 `loggedIn`
  如果客户端在成功登录后被踢出则为`true`
-如果kick发生在登录阶段则为 `false` 
+如果kick发生在登录阶段则为 `false`
 
 #### "end" (reason)
 
@@ -1308,7 +1309,7 @@ comparison.
  * `pitch`: The pitch of the note (between 0-24 inclusive where 0 is the
    lowest and 24 is the highest). More information about how the pitch values
    correspond to notes in real life are available on the
-   [official Minecraft wiki](http://www.minecraftwiki.net/wiki/Note_Block).
+   [official Minecraft wiki](http://minecraft.wiki/w/Note_Block).
 
 #### "pistonMove" (block, isPulling, direction)
 
@@ -1338,6 +1339,12 @@ This occurs whether the process was completed or aborted.
 #### "diggingAborted" (block)
 
  * `block` - 方块仍然存在
+
+#### "usedFirework" (fireworkEntityId)
+
+在机器人在鞘翅飞行时使用烟花火箭时触发
+
+ * `fireworkEntityId` - 烟花火箭的实体编号
 
 #### "move"
 
@@ -2001,7 +2008,7 @@ All options attributes are false by default, except mode which is 2 (as to repli
 
 This can be used to check is a specific feature is available in the current Minecraft version. This is usually only required for handling version-specific functionality.
 
-The list of available features can be found inside the [./lib/features.json](https://github.com/PrismarineJS/mineflayer/blob/master/lib/features.json) file.
+The list of available features can be found inside the [features.json](https://github.com/PrismarineJS/minecraft-data/blob/master/data/pc/common/features.json) file.
 
 #### bot.waitForTicks(ticks)
 
@@ -2015,7 +2022,7 @@ These are lower level methods for the inventory, they can be useful sometimes bu
 
 This function also returns a `Promise`, with `void` as its argument upon completion.
 
-Click on the current window. See details at https://wiki.vg/Protocol#Click_Window
+Click on the current window. See details at https://minecraft.wiki/w/Protocol#Click_Window
 
 #### bot.putSelectedItemRange(start, end, window, slot)
 

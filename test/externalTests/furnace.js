@@ -1,25 +1,25 @@
 const assert = require('assert')
+const { onceWithCleanup } = require('../../lib/promise_utils')
 
 module.exports = () => async (bot) => {
-  const mcData = require('minecraft-data')(bot.version)
-  const Item = require('prismarine-item')(bot.version)
+  const Item = require('prismarine-item')(bot.registry)
 
   const furnacePos = bot.entity.position.offset(2, 0, 0).floored()
-  const coalId = mcData.itemsByName.coal.id
-  const porkchopId = mcData.itemsByName.porkchop.id
-  const cookedPorkchopId = mcData.itemsByName.cooked_porkchop.id
+  const coalId = bot.registry.itemsByName.coal.id
+  const porkchopId = bot.registry.itemsByName.porkchop.id
+  const cookedPorkchopId = bot.registry.itemsByName.cooked_porkchop.id
   const coalInputCount = 2
   const porkchopInputCount = 2
 
   // Test setup
-  await bot.test.setInventorySlot(36, new Item(mcData.itemsByName.furnace.id, 1))
+  await bot.test.setInventorySlot(36, new Item(bot.registry.itemsByName.furnace.id, 1))
   await bot.test.placeBlock(36, furnacePos)
   await bot.test.setInventorySlot(37, new Item(porkchopId, porkchopInputCount))
   await bot.test.setInventorySlot(38, new Item(coalId, coalInputCount)) // Get coal
   if (bot.supportFeature('itemsAreAlsoBlocks')) {
-    assert.strictEqual(bot.blockAt(furnacePos).type, mcData.itemsByName.furnace.id)
+    assert.strictEqual(bot.blockAt(furnacePos).type, bot.registry.itemsByName.furnace.id)
   } else {
-    assert.strictEqual(bot.blockAt(furnacePos).type, mcData.blocksByName.furnace.id)
+    assert.strictEqual(bot.blockAt(furnacePos).type, bot.registry.blocksByName.furnace.id)
   }
 
   // Put inputs
@@ -43,12 +43,27 @@ module.exports = () => async (bot) => {
   assert.strictEqual(furnace.inputItem().type, porkchopId)
   assert.strictEqual(furnace.inputItem().count, porkchopInputCount)
 
-  // Wait and take the output and inputs
-  await bot.test.wait(500)
+  // Burning starts on the next server tick; the window properties carrying
+  // fuel and progress arrive as furnace updates, not with the item packets.
+  await onceWithCleanup(furnace, 'update', {
+    timeout: 5000,
+    checkCondition: () => furnace.fuel > 0 && furnace.fuel < 1 && furnace.progress > 0 && furnace.progress < 1
+  })
   assert(furnace.fuel > 0 && furnace.fuel < 1)
   assert(furnace.progress > 0 && furnace.progress < 1)
 
-  await bot.test.wait(furnace.progressSeconds * 1000 + 500)
+  // The furnace only completes on cookTime == totalCookTime (not >=), so the
+  // merged value must stay below 200.
+  const { x, y, z } = furnacePos
+  const cookTimeKey = bot.supportFeature('furnaceNbtUsesSnakeCase') ? 'cooking_time_spent' : 'CookTime'
+  if (bot.supportFeature('hasDataCommand')) {
+    bot.chat(`/data merge block ${x} ${y} ${z} {${cookTimeKey}:195s}`)
+  } else {
+    bot.chat(`/blockdata ${x} ${y} ${z} {${cookTimeKey}:195s}`)
+  }
+  // The 5 remaining ticks complete in 250-320ms on every tested version; a
+  // timeout means the merge was silently ignored.
+  await onceWithCleanup(furnace, 'update', { timeout: 500, checkCondition: () => furnace.outputItem() !== null })
   assert.strictEqual(furnace.outputItem(), furnace.slots[2])
   assert.strictEqual(furnace.outputItem().type, cookedPorkchopId)
   assert.strictEqual(furnace.outputItem().count, 1)
@@ -62,9 +77,7 @@ module.exports = () => async (bot) => {
   await furnace.takeOutput()
   await furnace.takeInput()
   await furnace.takeFuel()
-  furnace.close()
-
-  await bot.test.wait(500)
+  await furnace.close()
 
   // Check inventory
   const cookedPorkchopCount = bot.inventory.count(cookedPorkchopId)

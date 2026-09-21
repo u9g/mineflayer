@@ -1,4 +1,2 @@
-image:
-  file: .gitpod.DockerFile
 tasks:
-- command: npm install
+- command: npm install && sdk install java

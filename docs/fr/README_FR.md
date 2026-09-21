@@ -9,8 +9,8 @@
 
 [![Try it on gitpod](https://img.shields.io/badge/try-on%20gitpod-brightgreen.svg)](https://gitpod.io/#https://github.com/PrismarineJS/mineflayer)
 
-| <sub>EN</sub> [Anglais](../README.md) | <sub>RU</sub> [Russe](../ru/README_RU.md) | <sub>ES</sub> [Espagnol](../es/README_ES.md) | <sub>FR</sub> [Français](README_FR.md) | <sub>TR</sub> [Türkçe](../tr/README_TR.md) | <sub>ZH</sub> [Chinois](../zh/README_ZH_CN.md) |
-|-------------------------|----------------------------|----------------------------|----------------------------|----------------------------|----------------------------|
+| <sub>EN</sub> [Anglais](../README.md) | <sub>RU</sub> [Russe](../ru/README_RU.md) | <sub>ES</sub> [Espagnol](../es/README_ES.md) | <sub>FR</sub> [Français](README_FR.md) | <sub>TR</sub> [Türkçe](../tr/README_TR.md) | <sub>ZH</sub> [Chinois](../zh/README_ZH_CN.md) | <sub>BR</sub> [Portuguese](../br/README_BR.md) |
+|-------------------------|----------------------------|----------------------------|----------------------------|----------------------------|----------------------------|----------------------------|
 
 Créé des robots Minecraft avec API stable, puissante et facilement maniable, [API](api.md).
 
@@ -18,7 +18,7 @@ Si c'est la première fois que vous utilisez Node.js, il vaut mieux commencer av
 
 ## Caractéristiques:
 
- * Compatible avec Minecraft 1.8, 1.9, 1.10, 1.11, 1.12, 1.13, 1.14, 1.15 et 1.16.
+ * Compatible avec Minecraft 1.8, 1.9, 1.10, 1.11, 1.12, 1.13, 1.14, 1.15, 1.16, 1.17, 1.18, 1.19 et 1.20.
  * Reconnaissante et pistage des entités.
  * Identification des blocs. Vous pouvez passer en revue le monde autour de vous. Quelques millisecondes suffisent pour trouver n'importe quel bloc.
  * Information sur la physique et mouvements, données sur la taille des blocs...
@@ -108,7 +108,7 @@ bot.once('spawn', () => {
 ```
 et vous obtiendrez un affichage en *direct* qui ressemble à ceci:
 
-[<img src="https://prismarine.js.org/prismarine-viewer/test_1.16.1.png" alt="viewer" width="500">](https://prismarine.js.org/prismarine-viewer/)
+[<img src="https://prismarinejs.github.io/prismarine-viewer/test_1.16.1.png" alt="viewer" width="500">](https://prismarinejs.github.io/prismarine-viewer/)
 
 #### Exemples:
 
@@ -221,14 +221,32 @@ Laissez un coup d'oeil à ses projets :
 
 ### Tout tester
 
-Exécuter seulement : `npm test`
+Exécuter seulement :
+
+```bash
+npm test
+```
 
 ### Tester une version spécifique
-Exécutez `npm test -g <version>`, où `<version>` est une version de Minecraft comme `1.12`, `1.15.2`...
+
+Exécutez
+
+```bash
+npm test -g <version>
+```
+
+où `<version>` est une version de Minecraft comme `1.12`, `1.15.2`...
 
 ### Tester un test spécifique
-Executer `npm test -g <test_name>`, où `<test_name>` est le nom d'un teste comme `lit`, `utiliseCoffre`, `rayTrace`...
+
+Executer
+
+```bash
+npm test -g <test_name>
+```
+
+où `<test_name>` est le nom d'un teste comme `lit`, `utiliseCoffre`, `rayTrace`...
 
 ## Licence
 
-[MIT](LICENCE)
+[MIT](../../LICENSE)
