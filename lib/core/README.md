@@ -12,16 +12,18 @@ codec:  packet -> event,  output -> packets      (one per version)
   - **`state`** is plain data: no sockets, timers, closures or event emitters. `step` updates it in place.
   - **Events** are what happened, in the plugin's own terms: `{ type: 'healthUpdate', health, ... }`, `{ type: 'respawnCommand' }`.
   - **Outputs** are what to do: `{ type: 'emit', event, args }` emits a bot event, and any other type (`{ type: 'requestRespawn' }`) is for the codec to send.
-- **The codec** holds every version difference in packet names and fields. `createCodec(supportFeature)` returns `packets` (the clientbound packets it listens to), `decode(name, data)` and `encode(output)`, which returns zero or more `{ name, data }` packets. An output can encode to nothing on versions without that packet.
+  - **Timers** are outputs too: `{ type: 'setTimer', name, ms }` and `{ type: 'clearTimer', name }`. The driver runs them and feeds `{ type: 'timer', name }` back in when one runs out, so the core stays free of real time and tests fire timers by hand.
+- **The codec** holds every version and edition difference in packet names and fields. It returns `packets` (the clientbound packets it listens to), `decode(name, data)` and `encode(output)`, which returns zero or more `{ name, data }` packets. An output can encode to nothing on versions without that packet, and `decode` returns `null` for a packet that means nothing to the core (another entity's attributes, say). A codec may remember what later packets need from earlier ones, such as Bedrock's player runtime id from `start_game`, but makes no decisions about the plugin's logic.
+- **Editions** share the core. Java uses `createCodec(supportFeature)` (`healthCodec.js`) and Bedrock uses `createBedrockCodec()` (`healthCodecBedrock.js`). Where the editions' *behaviour* differs (Bedrock spawns on `play_status`, and respawns through a handshake with the server), the Bedrock plugin turns it on with `config` flags.
 
-The matching plugin in `lib/plugins/` is a thin adapter. `driver.js` feeds the codec's packets and the bot's API calls into the core and performs its outputs, and the plugin exposes the core's state as the same `bot.*` properties as before. The public API and the events stay the same, so unconverted plugins and user code can't tell the difference.
+The matching plugins in `lib/plugins/` and `lib/bedrock_plugins/` are thin adapters. `driver.js` feeds the codec's packets and the bot's API calls into the core and performs its outputs (through `bot._client.write`, or a `send` the plugin passes, like Bedrock's `bot._client.queue`), and the plugin exposes the core's state as the same `bot.*` properties as before. The public API and the events stay the same, so unconverted plugins and user code can't tell the difference.
 
 ## Testing
 
 Because neither layer does IO, both are tested without a server. See `test/healthCoreTest.js`.
 
 - **Core:** feed events and assert on the outputs, for each combination of `config` values. No version data is needed, so this runs once.
-- **Codec:** for each tested version, write its packets with that version's real schema (`minecraft-protocol`'s serializer) and parse them back. A field the version doesn't have is lost on the way, so a wrong field name fails here instead of against a value the test derived from the same feature flag.
+- **Codec:** for each tested version, write its packets with that version's real schema (`minecraft-protocol`'s serializer; `bedrock-protocol`'s for Bedrock, in `test/healthBedrockTest.js`) and parse them back. A field the version doesn't have is lost on the way, so a wrong field name fails here instead of against a value the test derived from the same feature flag.
 
 CI only runs tests whose name contains a tested version (`mocha -g "<version>v"`). Name codec suites `... ${version}v`, and name the core suite after the newest tested version so it runs exactly once.
 
@@ -30,6 +32,7 @@ CI only runs tests whose name contains a tested version (`mocha -g "<version>v"`
 | Core | Codec | Plugin |
 |---|---|---|
 | `health.js` | `healthCodec.js` | `lib/plugins/health.js` |
+| `health.js` | `healthCodecBedrock.js` | `lib/bedrock_plugins/health.js` |
 
 ## Converting another plugin
 
