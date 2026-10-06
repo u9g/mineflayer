@@ -18,20 +18,11 @@ const labels = (outputs) => outputs.map(o => o.type === 'emit' ? `emit ${o.event
 const spawned = ['clientLoaded', 'emit spawn']
 
 // A fresh core; feed(event) steps it and returns the output labels
-function newCore (respawn = true, behaviour = {}) {
-  const config = createConfig({ respawn, ...behaviour })
+function newCore (respawn = true) {
+  const config = createConfig({ respawn })
   const state = createState()
   return { state, feed: (event) => labels(step(config, state, event)) }
 }
-
-// The behaviour lib/bedrock_plugins/health.js configures, already joined
-function newHandshakeCore (respawn = true) {
-  const core = newCore(respawn, { spawnOnFirstHealth: false, respawnHandshake: true })
-  core.feed({ type: 'joined' })
-  return core
-}
-const ready = { type: 'respawnReady', position: { x: 1, y: 64, z: 2 } }
-const fallback = { type: 'timer', name: 'respawnFallback' }
 
 // The core has no version data, so it runs once. CI only runs tests whose name contains a
 // tested version (mocha -g "<version>v"), so the suite is named after the newest one.
@@ -91,67 +82,6 @@ describe(`health core ${testedVersions[testedVersions.length - 1]}v`, () => {
     const { feed } = newCore()
     feed(health(20))
     assert.deepStrictEqual(feed(respawnCommand), [])
-  })
-
-  it('keeps fields a partial health update leaves out', () => {
-    const { state, feed } = newCore()
-    feed(health(20))
-    assert.deepStrictEqual(feed({ type: 'healthUpdate', food: 5 }), ['emit health'])
-    assert.strictEqual(state.health, 20)
-    assert.strictEqual(state.food, 5)
-    assert.deepStrictEqual(feed({ type: 'healthUpdate', maxHealth: 30 }), [])
-    assert.strictEqual(state.maxHealth, 30)
-  })
-
-  it('keeps the last death cause', () => {
-    const { state, feed } = newCore()
-    assert.deepStrictEqual(feed({ type: 'deathInfo', cause: 'death.attack.lava' }), ['emit deathInfo'])
-    assert.deepStrictEqual(state.deathCause, { cause: 'death.attack.lava', messages: [] })
-  })
-
-  describe('respawn handshake (Bedrock)', () => {
-    it('does not spawn on the first health update', () => {
-      const { feed } = newHandshakeCore()
-      assert.deepStrictEqual(feed(health(20)), ['emit health'])
-    })
-
-    it('says ready once per death and starts the fallback on every request', () => {
-      const { feed } = newHandshakeCore(false)
-      feed(health(20))
-      assert.deepStrictEqual(feed(health(0)), ['emit health', 'emit death'])
-      assert.deepStrictEqual(feed(respawnCommand), ['readyToSpawn', 'setTimer'])
-      assert.deepStrictEqual(feed(respawnCommand), ['setTimer'])
-      assert.deepStrictEqual(feed(fallback), ['requestRespawn'])
-      assert.deepStrictEqual(feed(fallback), [])
-    })
-
-    it('auto-respawns once per death, not on every dead health update', () => {
-      const { feed } = newHandshakeCore()
-      feed(health(20))
-      assert.deepStrictEqual(feed(health(0)), ['emit health', 'emit death', 'readyToSpawn', 'setTimer'])
-      assert.deepStrictEqual(feed(health(0)), ['emit health'])
-    })
-
-    it('asks to respawn when the server is ready, and places the player at full health', () => {
-      const { state, feed } = newHandshakeCore()
-      feed({ type: 'healthUpdate', health: 20, maxHealth: 30 })
-      feed(health(0))
-      assert.deepStrictEqual(feed(ready), ['clearTimer', 'requestRespawn', 'emit health', ...spawned])
-      assert.strictEqual(state.health, 30)
-      assert.strictEqual(state.isAlive, true)
-    })
-
-    it('answers every ready while alive (the join handshake)', () => {
-      const { feed } = newHandshakeCore()
-      assert.deepStrictEqual(feed(ready), ['readyToSpawn'])
-      assert.deepStrictEqual(feed(ready), ['readyToSpawn'])
-    })
-
-    it('cannot respawn before the server names the player', () => {
-      const { feed } = newCore(true, { spawnOnFirstHealth: false, respawnHandshake: true })
-      assert.deepStrictEqual(feed(health(0)), ['emit health', 'emit death'])
-      assert.deepStrictEqual(feed(respawnCommand), [])
-    })
   })
 })
 

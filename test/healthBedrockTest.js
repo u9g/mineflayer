@@ -1,11 +1,14 @@
 /* eslint-env mocha */
-// Bedrock health without a server: the codec (lib/core/healthCodecBedrock.js) against each version's packet schema,
-// written with bedrock-protocol's serializer and parsed back as the other side would, and the plugin
+// Bedrock health without a server: the core (lib/core/healthBedrock.js), that it emits the same events as
+// the Java core, the codec (lib/core/healthCodecBedrock.js) against each version's packet schema, written
+// with bedrock-protocol's serializer and parsed back as the other side would, and the plugin
 // (lib/bedrock_plugins/health.js) driven by mock packets.
 
 const assert = require('assert')
 const { EventEmitter } = require('events')
 const { testedVersions } = require('../lib/version')
+const javaCore = require('../lib/core/health')
+const bedrockCore = require('../lib/core/healthBedrock')
 const { createBedrockCodec } = require('../lib/core/healthCodecBedrock')
 const injectHealth = require('../lib/bedrock_plugins/health')
 
@@ -15,6 +18,121 @@ const bedrockVersions = ['1.26.45', '1.26.51']
 const ciTag = `${testedVersions[testedVersions.length - 1]}v`
 
 const attribute = (name, current, max = 20) => ({ min: 0, max, current, default_min: 0, default_max: max, default: max, name, modifiers: [] })
+
+// A fresh core; feed(event) steps it and returns its outputs as short labels: "readyToSpawn", "emit spawn"
+function newCore ({ createConfig, createState, step }, respawn = true) {
+  const config = createConfig({ respawn })
+  const state = createState()
+  const feed = (event) => step(config, state, event).map(o => o.type === 'emit' ? `emit ${o.event}` : o.type)
+  return { state, feed }
+}
+// Only the bot events among labels
+const emitted = (labels) => labels.filter(label => label.startsWith('emit '))
+
+// A Bedrock core whose player start_game has named
+function joinedBedrockCore (respawn = true) {
+  const core = newCore(bedrockCore, respawn)
+  assert.deepStrictEqual(core.feed({ type: 'joined' }), [])
+  return core
+}
+const health = (value) => ({ type: 'healthUpdate', health: value, food: 18, foodSaturation: 2.5 })
+const ready = { type: 'respawnReady', position: { x: 1, y: 64, z: 2 } }
+const respawnCommand = { type: 'respawnCommand' }
+const fallback = { type: 'timer', name: 'respawnFallback' }
+
+describe(`health events are the same on Java and Bedrock ${ciTag}`, () => {
+  // The same life on each edition, in that edition's core events; each step lists the bot events it must emit
+  const life = [
+    { java: health(20), bedrock: health(20), emits: { java: ['emit spawn', 'emit health'], bedrock: ['emit health'] } },
+    { java: health(15), bedrock: health(15), emits: ['emit health'] },
+    { java: health(0), bedrock: health(0), emits: ['emit health', 'emit death'] },
+    // Java respawns on the next health update, Bedrock on the server's spawn point
+    { java: health(20), bedrock: ready, emits: ['emit health', 'emit spawn'] },
+    { java: health(19), bedrock: health(19), emits: ['emit health'] }
+  ]
+
+  it('emits the same events through a life, death and respawn', () => {
+    const java = newCore(javaCore, false)
+    const bedrock = joinedBedrockCore(false)
+    for (const { java: javaEvent, bedrock: bedrockEvent, emits } of life) {
+      assert.deepStrictEqual(emitted(java.feed(javaEvent)), emits.java ?? emits)
+      assert.deepStrictEqual(emitted(bedrock.feed(bedrockEvent)), emits.bedrock ?? emits)
+    }
+    for (const key of ['isAlive', 'health', 'food', 'foodSaturation']) assert.deepStrictEqual(bedrock.state[key], java.state[key], key)
+  })
+
+  it('builds every event from the shared list', () => {
+    const events = require('../lib/core/healthEvents')
+    const outputs = []
+    for (const core of [newCore(javaCore), joinedBedrockCore()]) {
+      for (const event of [health(20), health(0), ready, health(20), { type: 'respawned' }, { type: 'deathInfo', cause: 'x' }]) {
+        outputs.push(...core.feed(event))
+      }
+    }
+    for (const label of emitted(outputs)) assert.ok(events[label.slice('emit '.length)], label)
+  })
+})
+
+describe(`health core bedrock ${ciTag}`, () => {
+  it('does not spawn on the first health update; the connection does', () => {
+    const { feed } = joinedBedrockCore()
+    assert.deepStrictEqual(feed(health(20)), ['emit health'])
+  })
+
+  it('keeps fields a partial health update leaves out', () => {
+    const { state, feed } = joinedBedrockCore()
+    feed(health(20))
+    assert.deepStrictEqual(feed({ type: 'healthUpdate', food: 5 }), ['emit health'])
+    assert.strictEqual(state.health, 20)
+    assert.strictEqual(state.food, 5)
+    assert.deepStrictEqual(feed({ type: 'healthUpdate', maxHealth: 30 }), [])
+    assert.strictEqual(state.maxHealth, 30)
+  })
+
+  it('says ready once per death and starts the fallback on every request', () => {
+    const { feed } = joinedBedrockCore(false)
+    feed(health(20))
+    assert.deepStrictEqual(feed(health(0)), ['emit health', 'emit death'])
+    assert.deepStrictEqual(feed(respawnCommand), ['readyToSpawn', 'setTimer'])
+    assert.deepStrictEqual(feed(respawnCommand), ['setTimer'])
+    assert.deepStrictEqual(feed(fallback), ['requestRespawn'])
+    assert.deepStrictEqual(feed(fallback), [])
+  })
+
+  it('auto-respawns once per death, not on every dead health update', () => {
+    const { feed } = joinedBedrockCore()
+    feed(health(20))
+    assert.deepStrictEqual(feed(health(0)), ['emit health', 'emit death', 'readyToSpawn', 'setTimer'])
+    assert.deepStrictEqual(feed(health(0)), ['emit health'])
+  })
+
+  it('asks to respawn when the server is ready, and places the player at full health', () => {
+    const { state, feed } = joinedBedrockCore()
+    feed({ type: 'healthUpdate', health: 20, maxHealth: 30 })
+    feed(health(0))
+    assert.deepStrictEqual(feed(ready), ['clearTimer', 'requestRespawn', 'emit health', 'emit spawn'])
+    assert.strictEqual(state.health, 30)
+    assert.strictEqual(state.isAlive, true)
+  })
+
+  it('answers every ready while alive (the join handshake)', () => {
+    const { feed } = joinedBedrockCore()
+    assert.deepStrictEqual(feed(ready), ['readyToSpawn'])
+    assert.deepStrictEqual(feed(ready), ['readyToSpawn'])
+  })
+
+  it('cannot respawn before start_game names the player', () => {
+    const { feed } = newCore(bedrockCore)
+    assert.deepStrictEqual(feed(health(0)), ['emit health', 'emit death'])
+    assert.deepStrictEqual(feed(respawnCommand), [])
+  })
+
+  it('keeps the last death cause', () => {
+    const { state, feed } = joinedBedrockCore()
+    assert.deepStrictEqual(feed({ type: 'deathInfo', cause: 'death.attack.lava' }), ['emit deathInfo'])
+    assert.deepStrictEqual(state.deathCause, { cause: 'death.attack.lava', messages: [] })
+  })
+})
 
 for (const version of bedrockVersions) {
   describe(`health codec bedrock_${version} ${ciTag}`, () => {
@@ -60,7 +178,6 @@ for (const version of bedrockVersions) {
           for (const key of Object.keys(sent)) assert.deepStrictEqual(sent[key], data[key], `${output.type} -> ${name}.${key}`)
         }
       }
-      assert.deepStrictEqual(codec.encode({ type: 'clientLoaded' }), [])
     })
   })
 }
