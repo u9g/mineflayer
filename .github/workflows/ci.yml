@@ -37,17 +37,19 @@ jobs:
       run: |
         node -e "
           const v = require('./lib/version').testedVersions;
-          const groups = [];
-          const SIZE = 4;
-          for (let i = 0; i < v.length; i += SIZE) {
-            groups.push({ versions: v.slice(i, i + SIZE).join(' ') });
-          }
-          console.log('matrix='+JSON.stringify({'include': groups}))
+          // These servers burn 25-220 CPU-seconds building their data fixers
+          // at startup, enough to stall anything sharing their 4-core runner,
+          // so each gets its own; the rest share a runner in pairs.
+          const slow = ['1.13.2', '1.14.4', '1.15.2', '1.16.5', '1.17.1', '1.18.2'];
+          const groups = v.filter(x => slow.includes(x)).map(x => [x]);
+          const rest = v.filter(x => !slow.includes(x));
+          for (let i = 0; i < rest.length; i += 2) groups.push(rest.slice(i, i + 2));
+          console.log('matrix='+JSON.stringify({'include': groups.map(g => ({ versions: g.join(' ') }))}))
         " >> $GITHUB_OUTPUT
 
   MinecraftServer:
     needs: PrepareSupportedVersions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     name: MC ${{ matrix.versions }}
     strategy:
       matrix: ${{ fromJson(needs.PrepareSupportedVersions.outputs.matrix) }}
@@ -60,12 +62,31 @@ jobs:
         with:
           node-version: 24
       - name: Setup Java JDK
-        uses: actions/setup-java@v1.4.3
+        uses: actions/setup-java@v4
         with:
+          distribution: temurin
           java-version: 25
-          java-package: jre
+      # There is no lockfile, so the date in the key is what picks up new
+      # dependency releases: at most a day late, and npm install below
+      # still runs on top of whatever is restored.
+      - id: date
+        run: echo "date=$(date -u +%F)" >> $GITHUB_OUTPUT
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ hashFiles('package.json') }}-${{ steps.date.outputs.date }}
       - name: Install Dependencies
         run: npm install
+
+      # Restored and saved separately: actions/cache only saves when the job
+      # passes, and a failing test shouldn't cost the next run its jars.
+      - name: Restore server jars
+        id: jars
+        uses: actions/cache/restore@v4
+        with:
+          path: server_jars
+          key: server-jars-${{ matrix.versions }}
 
       # Per-test durations from the last master run of this version group, so a PR gets a
       # comment listing tests it made more than 2x slower (test/common/compareDurations.js).
@@ -81,46 +102,64 @@ jobs:
 
       - name: Start Tests
         run: |
-          exit_code=0
+          # Each version runs its internal tests, which need no server, in a
+          # separate process alongside its external tests. They finish well
+          # within the external ones, so they're niced to leave the CPU to the
+          # servers starting up.
+          parts=""
           pids=""
           for v in ${{ matrix.versions }}; do
-            # TRACE is cheap (<1% runtime) and only written by the harness bot,
-            # so always record a packet trace for post-mortem analysis.
-            TRACE="trace-${v}.jsonl" DURATIONS="durations/durations-${v}.json" npm run mocha_test -- --retries 3 -g "${v}v" > "test-${v}.log" 2>&1 &
-            pids="$pids $!"
+            for kind in external internal; do
+              p="$v-$kind"
+              nice=""
+              [ $kind = internal ] && nice="nice -n 10"
+              parts="$parts $p"
+              # TRACE is cheap (<1% runtime) and only written by the harness bot,
+              # so always record a packet trace for post-mortem analysis.
+              TRACE="trace-${p}.jsonl" DURATIONS="durations/durations-${p}.json" $nice npm run mocha_test -- --retries 3 -g "mineflayer_${kind} ${v}v" > "test-${p}.log" 2>&1 &
+              pids="$pids $!"
+            done
           done
+          exit_code=0
           for pid in $pids; do
             wait $pid || exit_code=$?
           done
-          # Print passing versions first, then failing versions last
-          for v in ${{ matrix.versions }}; do
-            if ! grep -q "failing" "test-${v}.log"; then
+          # Print passing parts first, then failing parts last
+          for p in $parts; do
+            if ! grep -q "failing" "test-${p}.log"; then
               echo ""
               echo "=========================================="
-              echo "  Results for Minecraft ${v}"
+              echo "  Results for Minecraft ${p}"
               echo "=========================================="
-              cat "test-${v}.log"
+              cat "test-${p}.log"
             fi
           done
-          for v in ${{ matrix.versions }}; do
-            if grep -q "failing" "test-${v}.log"; then
+          for p in $parts; do
+            if grep -q "failing" "test-${p}.log"; then
               echo ""
               echo "=========================================="
-              echo "  FAILED: Minecraft ${v}"
+              echo "  FAILED: Minecraft ${p}"
               echo "=========================================="
-              cat "test-${v}.log"
+              cat "test-${p}.log"
             fi
           done
-          # Only the failing versions' logs and packet traces are uploaded,
+          # Only the failing parts' logs and packet traces are uploaded,
           # so artifact storage stays small; they auto-expire quickly too.
           mkdir -p artifacts
-          for v in ${{ matrix.versions }}; do
-            if grep -q "failing" "test-${v}.log"; then
-              cp "test-${v}.log" artifacts/
-              cp "trace-${v}.jsonl" artifacts/ 2>/dev/null || true
+          for p in $parts; do
+            if grep -q "failing" "test-${p}.log"; then
+              cp "test-${p}.log" artifacts/
+              cp "trace-${p}.jsonl" artifacts/ 2>/dev/null || true
             fi
           done
           exit $exit_code
+
+      - name: Save server jars
+        if: always() && steps.jars.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: server_jars
+          key: server-jars-${{ matrix.versions }}
 
       - name: Compare test durations against master
         run: |
