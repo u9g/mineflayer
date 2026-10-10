@@ -9,7 +9,10 @@ module.exports = () => async (bot) => {
     // spawn protection and the dirt is needed by the later equip step.
     const opped = onceWithCleanup(bot, 'messagestr', {
       timeout: 5000,
-      checkCondition: (msg) => msg.includes(`Opped ${name}`) || msg.includes(`Made ${name} a server operator`)
+      // A retry re-ops a player the failed attempt already opped, which 1.13+
+      // answers with "Nothing changed. The player already is an operator".
+      checkCondition: (msg) => msg.includes(`Opped ${name}`) || msg.includes(`Made ${name} a server operator`) ||
+        msg.includes('already is an operator')
     })
     // Old versions render the give feedback with unsubstituted placeholders
     // ("Given [Dirt] * %d to 64"), so only the prefix can be matched.
