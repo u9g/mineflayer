@@ -11,7 +11,7 @@ codec:  packet -> event,  output -> packets      (one per version)
   - **`config`** is fixed when the bot is created: user options, and any version difference in *behaviour* (as a boolean, resolved from `bot.supportFeature`). It is frozen; `step` never changes it.
   - **`state`** is plain data: no sockets, timers, closures or event emitters. `step` updates it in place.
   - **Events** are what happened, in the plugin's own terms: `{ type: 'healthUpdate', health, ... }`, `{ type: 'respawnCommand' }`.
-  - **Outputs** are what to do: `{ type: 'emit', event, args }` emits a bot event, and any other type (`{ type: 'requestRespawn' }`) is for the codec to send.
+  - **Outputs** are what to do: `{ type: 'emit', event, args }` emits a bot event, an *effect* is for the adapter to perform (see below), and any other type (`{ type: 'requestRespawn' }`) is for the codec to send.
 - **The codec** holds every version difference in packet names and fields. `createCodec(supportFeature)` returns `packets` (the clientbound packets it listens to), `decode(name, data)` and `encode(output)`, which returns zero or more `{ name, data }` packets. An output can encode to nothing on versions without that packet.
 
 ```
@@ -23,23 +23,33 @@ lib/plugins/<name>/
 
 `index.js` is a thin adapter. `driver.js`, in this folder and shared by every converted plugin, feeds the codec's packets and the bot's API calls into the core and performs its outputs, and the plugin exposes the core's state as the same `bot.*` properties as before. The public API and the events stay the same, so unconverted plugins and user code can't tell the difference.
 
+## Objects the core can't hold as plain data
+
+`health/` fits the rules above as they are. `inventory/` needed three additions, which other plugins with rich state will need too:
+
+- **Model objects.** Windows are prismarine-windows objects: they hold the slots, work out what a click does, and are event emitters that user code listens to. The core keeps them in its state and reads them, and may create one, but never changes one. Every change is an **effect**, an output the adapter performs itself (`createDriver(bot, { ..., effects })`), so a listener on a window never runs in the middle of `step`.
+- **Effects that answer.** When the core needs the result of an effect, the effect dispatches it back as an event: 1.17+ clients apply a click to the window (`predictClick`) before sending it, and the adapter reports the slots it changed with `clickPredicted`, which the core turns into the packet. The nested dispatch runs before the rest of the batch, so the order is the same as a direct call.
+- **Requests.** A command whose caller waits for an answer (`clickWindow` waits for the server to confirm its click) carries a `request` object. The core only passes it on in the output that answers it, and the adapter fills it in. The answer can't go in the state, because a listener can start another click while one is being sent.
+
+Waiting is not the core's: the adapter's async API (`clickWindow`, `transfer`, `consume`, ...) is built from commands, and the timeouts and awaits stay there.
+
 ## Testing
 
-Because neither layer does IO, both are tested without a server. See `test/healthSansioTest.js`.
+Because neither layer does IO, both are tested without a server. See `test/healthSansioTest.js` and `test/inventorySansioTest.js`.
 
-- **Core:** feed events and assert on the outputs, for each combination of `config` values. No version data is needed, so this runs once.
+- **Core:** feed events and assert on the outputs, for each combination of `config` values. No version data is needed, so this runs once. (A core with model objects uses the newest version's, and sets its version flags by hand.)
 - **Codec:** for each tested version, write its packets with that version's real schema (`minecraft-protocol`'s serializer) and parse them back. A field the version doesn't have is lost on the way, so a wrong field name fails here instead of against a value the test derived from the same feature flag.
 
 CI only runs tests whose name contains a tested version (`mocha -g "<version>v"`). Name codec suites `... ${version}v`, and name the core suite after the newest tested version so it runs exactly once.
 
 ## Converted so far
 
-Every folder in `lib/plugins/`; so far only `health/`.
+Every folder in `lib/plugins/`; so far `health/` and `inventory/`.
 
 ## Converting another plugin
 
 1. Move `lib/plugins/<name>.js` to `lib/plugins/<name>/index.js` with `git mv`, so its history follows. `lib/loader.js` needs no change.
-2. Move the plugin's state and logic into `lib/plugins/<name>/core.js` with `createConfig(...)`, `createState()` and `step(config, state, event)`. Turn every `bot.emit` into an `emit` output and every `bot._client.write` into an output named for what it means.
+2. Move the plugin's state and logic into `lib/plugins/<name>/core.js` with `createConfig(...)`, `createState(config)` and `step(config, state, event)`. Turn every `bot.emit` into an `emit` output, every `bot._client.write` into an output named for what it means, and every change to an object others listen to into an effect.
 3. Move packet handling into `lib/plugins/<name>/codec.js`: decode each packet into an event, encode each output into packets. `bot.supportFeature(...)` checks about packet formats go here; checks that change behaviour go in `config`.
 4. Rewrite `index.js` as an adapter with `createDriver` (from `lib/sansio/driver.js`). List the codec's packets in the order the plugin registered its `_client` listeners, because other plugins handle the same packets and handler order is observable. Expose state with `exposeState`, and turn API methods into events.
 5. If the core needs data from a plugin that isn't converted yet, pass it in explicitly (as event data, or as a read-only query in `config`) rather than reading `bot.*` inside the core.
