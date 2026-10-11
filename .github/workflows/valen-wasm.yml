@@ -34,6 +34,11 @@ jobs:
           ref: ${{ env.VALEN_REF }}
           path: valen
 
+      # Valen's backend keeps unordered_maps of types it only forward-declares, which macOS's libc++
+      # accepts and Linux's libstdc++ rejects. Remove once Valen defines them first.
+      - name: Patch Valen for libstdc++
+        run: git -C valen apply "$GITHUB_WORKSPACE/lib/core/valen/valen-libstdcxx.patch"
+
       - name: Install LLVM 21
         run: |
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
@@ -53,7 +58,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: valen/target
-          key: valec-${{ env.VALEN_REF }}
+          key: valec-${{ env.VALEN_REF }}-${{ hashFiles('lib/core/valen/valen-libstdcxx.patch') }}
 
       - name: Build valec
         run: cargo build --manifest-path valen/Cargo.toml --bin valec

@@ -1,0 +1,78 @@
+diff --git a/Backend/src/metal/ast.h b/Backend/src/metal/ast.h
+index 1c73af7..98637f2 100644
+--- a/Backend/src/metal/ast.h
++++ b/Backend/src/metal/ast.h
+@@ -39,10 +39,35 @@ class Edge;
+ class Function;
+ class Prototype;
+ class Name;
+-struct OpaqueStructLayout;
+-enum class CoercionKind;
+-struct Coercion;
+-struct ExternAbi;
++
++// Defined before Package, which holds them by value in unordered_maps; libstdc++ needs those
++// value types complete.
++// An imported extern struct's layout (e.g. from rustc's tcx.layout_of).
++struct OpaqueStructLayout {
++  uint64_t sizeBytes;
++  uint64_t alignBytes;
++};
++enum class CoercionKind {
++  Ignore,
++  DirectInt,  // in a register as an integer of `directIntBits` bits
++  DirectPtr,  // as a pointer
++  Indirect,   // through memory by pointer, per @EACBIPZ, e.g. a large struct
++  Cast,       // a small struct rustc casts to one integer of `directIntBits` bits, its bytes cross as
++              // that integer.
++  Pair,       // crosses as two integers (`directIntBits`, `directIntBits2`), reassembled into the struct.
++  LocationPtr,// the hidden `&Location` arg of a `#[track_caller]` Rust func. Has no corresponding Vale
++              // argument. We pass a null ptr for it, because Valen uses panic=abort anyway (see @TCHAPZ).
++  FatPtr,     // as a two-register fat pointer (data_ptr,len).
++};
++struct Coercion {
++  CoercionKind kind;
++  uint32_t directIntBits;   // width when kind == DirectInt / Cast, a Pair's first component, or a FatPtr's len component, else ignored.
++  uint32_t directIntBits2;  // a Pair's second component width, else ignored.
++};
++struct ExternAbi {
++  Coercion ret;
++  std::vector<Coercion> args;
++};
+ 
+ class Package {
+ public:
+@@ -513,33 +538,6 @@ public:
+       sourceLocation(sourceLocation_) {}
+ };
+ 
+-// An imported extern struct's layout (e.g. from rustc's tcx.layout_of).
+-struct OpaqueStructLayout {
+-  uint64_t sizeBytes;
+-  uint64_t alignBytes;
+-};
+-enum class CoercionKind {
+-  Ignore,
+-  DirectInt,  // in a register as an integer of `directIntBits` bits
+-  DirectPtr,  // as a pointer
+-  Indirect,   // through memory by pointer, per @EACBIPZ, e.g. a large struct
+-  Cast,       // a small struct rustc casts to one integer of `directIntBits` bits, its bytes cross as
+-              // that integer.
+-  Pair,       // crosses as two integers (`directIntBits`, `directIntBits2`), reassembled into the struct.
+-  LocationPtr,// the hidden `&Location` arg of a `#[track_caller]` Rust func. Has no corresponding Vale
+-              // argument. We pass a null ptr for it, because Valen uses panic=abort anyway (see @TCHAPZ).
+-  FatPtr,     // as a two-register fat pointer (data_ptr,len).
+-};
+-struct Coercion {
+-  CoercionKind kind;
+-  uint32_t directIntBits;   // width when kind == DirectInt / Cast, a Pair's first component, or a FatPtr's len component, else ignored.
+-  uint32_t directIntBits2;  // a Pair's second component width, else ignored.
+-};
+-struct ExternAbi {
+-  Coercion ret;
+-  std::vector<Coercion> args;
+-};
+-
+ namespace std {
+   template<> struct hash<VarNameM> {
+     size_t operator()(const VarNameM& v) const { return std::hash<std::string>()(v.name); }
