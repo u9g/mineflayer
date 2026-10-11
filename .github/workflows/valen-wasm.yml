@@ -1,0 +1,76 @@
+name: Valen Wasm health core
+
+# Builds lib/core/valen/health.vale into lib/core/health.wasm with the Valen compiler, then runs
+# the health core tests against that fresh build. The built module is uploaded as an artifact.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'lib/core/**'
+      - 'test/healthCoreTest.js'
+      - '.github/workflows/valen-wasm.yml'
+  pull_request:
+    paths:
+      - 'lib/core/**'
+      - 'test/healthCoreTest.js'
+      - '.github/workflows/valen-wasm.yml'
+
+env:
+  VALEN_REF: 7cf925b1cc715e2a60c71e635412c17ef11a15ad
+  VALEN_DIR: ${{ github.workspace }}/valen
+  WASI_SDK_PATH: ${{ github.workspace }}/wasi-sdk
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out Valen
+        uses: actions/checkout@v4
+        with:
+          repository: valen-lang/valen
+          ref: ${{ env.VALEN_REF }}
+          path: valen
+
+      - name: Install LLVM 21
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+          echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-21 main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          sudo apt-get update
+          sudo apt-get install -y llvm-21 llvm-21-dev clang-21 libpolly-21-dev cmake build-essential zlib1g-dev libzstd-dev libcurl4-openssl-dev
+          echo "LLVM_CONFIG=/usr/bin/llvm-config-21" >> $GITHUB_ENV
+
+      - name: Install wasi-sdk
+        run: |
+          mkdir -p "$WASI_SDK_PATH"
+          curl -L https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-33/wasi-sdk-33.0-x86_64-linux.tar.gz \
+            | tar -xz -C "$WASI_SDK_PATH" --strip-components=1
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - uses: actions/cache@v4
+        with:
+          path: valen/target
+          key: valec-${{ env.VALEN_REF }}
+
+      - name: Build valec
+        run: cargo build --manifest-path valen/Cargo.toml --bin valec
+
+      - name: Build health.wasm
+        run: lib/core/valen/build.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: health-wasm
+          path: lib/core/health.wasm
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm install
+
+      - name: Test both cores
+        run: npx mocha test/healthCoreTest.js -g "health core|plugin on the"

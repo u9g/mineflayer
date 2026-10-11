@@ -1,0 +1,88 @@
+// The health core (../health.js) in Valen, built to Wasm by ./build.sh and loaded by
+// ../healthWasm.js, which turns events into these arguments and the result back into outputs.
+//
+// Only ints and floats cross into Wasm, so each call takes the state it needs and returns it:
+//   step(autoRespawn, isAlive, receivedHealth, event, health) -> result
+// Booleans are 0 or 1. Events: 1 healthUpdate, 2 respawned, 3 respawnCommand.
+// result bit 0 is the new isAlive, bit 1 the new receivedHealth, and from bit 2 on come the
+// outputs in order, 3 bits each: 1 clientLoaded, 2 requestRespawn, 3 emit health,
+// 4 emit death, 5 emit spawn, 6 emit respawn.
+
+struct HealthState {
+  isAlive bool;
+  receivedHealth bool;
+}
+
+// The outputs so far, packed lowest first; place is the multiplier for the next one
+struct Outputs {
+  packed int;
+  place int;
+}
+
+func push(out &Outputs, code int) {
+  set out.packed = __copy_prim(out.packed) + code * __copy_prim(out.place);
+  set out.place = __copy_prim(out.place) * 8;
+}
+
+func bit(b bool) int {
+  return if (b) { 1 } else { 0 };
+}
+
+exported func step(autoRespawn int, isAlive int, receivedHealth int, event int, health float) int {
+  state = HealthState(isAlive == 1, receivedHealth == 1);
+  out = Outputs(0, 1);
+  if (event == 1) {
+    onHealthUpdate(autoRespawn == 1, &state, &out, health);
+  } else if (event == 2) {
+    onRespawned(&state, &out);
+  } else if (event == 3) {
+    respawn(&state, &out);
+  }
+  return bit(__copy_prim(state.isAlive)) + 2 * bit(__copy_prim(state.receivedHealth)) + 4 * __copy_prim(out.packed);
+}
+
+func onRespawned(state &HealthState, out &Outputs) {
+  set state.isAlive = false;
+  push(out, 6);
+}
+
+func onHealthUpdate(autoRespawn bool, state &HealthState, out &Outputs, health float) {
+  // The first health update spawns the bot, if it is alive
+  alive = health > 0.0;
+  if (not __copy_prim(state.receivedHealth)) {
+    set state.receivedHealth = true;
+    if (alive) {
+      spawn(out);
+    }
+  }
+
+  push(out, 3);
+  if (not alive) {
+    if (__copy_prim(state.isAlive)) {
+      set state.isAlive = false;
+      push(out, 4);
+    }
+    if (autoRespawn) {
+      respawn(state, out);
+    }
+  } else if (not __copy_prim(state.isAlive)) {
+    set state.isAlive = true;
+    spawn(out);
+  }
+}
+
+func spawn(out &Outputs) {
+  push(out, 1);
+  push(out, 5);
+}
+
+func respawn(state &HealthState, out &Outputs) {
+  if (not __copy_prim(state.isAlive)) {
+    push(out, 2);
+  }
+}
+
+// Valen builds a program around main; ../healthWasm.js never calls it
+exported func main() int {
+  return 0;
+}
