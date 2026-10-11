@@ -53,12 +53,15 @@ jobs:
           curl -L https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-33/wasi-sdk-33.0-x86_64-linux.tar.gz \
             | tar -xz -C "$WASI_SDK_PATH" --strip-components=1
 
-      - uses: dtolnay/rust-toolchain@nightly
+      # Valen uses #![feature(box_patterns)], which nightly removed in 1.100
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-07-01
 
       - uses: actions/cache@v4
         with:
           path: valen/target
-          key: valec-${{ env.VALEN_REF }}-${{ hashFiles('lib/core/valen/valen-libstdcxx.patch') }}
+          key: valec-${{ env.VALEN_REF }}-nightly-2026-07-01-${{ hashFiles('lib/core/valen/valen-libstdcxx.patch') }}
 
       - name: Build valec
         run: cargo build --manifest-path valen/Cargo.toml --bin valec

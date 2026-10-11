@@ -1,5 +1,6 @@
 #!/bin/sh
-# Builds health.vale into ../health.wasm, a WASI reactor exporting "step".
+# Builds health.vale into ../health.wasm: a WASI reactor exporting its exported funcs, which
+# imports its extern funcs from "env" (../healthWasm.js provides them).
 #
 # Needs a built Valen compiler (https://github.com/valen-lang/valen, `cargo build --bin valec`)
 # and wasi-sdk. .github/workflows/valen-wasm.yml runs this on Ubuntu.
@@ -11,10 +12,13 @@ here=$(cd "$(dirname "$0")" && pwd)
 : "${WASI_SDK_PATH:?set WASI_SDK_PATH to a wasi-sdk install}"
 out=$(mktemp -d)
 
-# valec links a command with main; a reactor instead keeps the instance usable between calls
+# valec links a command around main. A reactor instead stays usable between calls; the externs
+# are left undefined to become imports, and the exported funcs are kept as exports.
 cat > "$out/clang" <<EOF
 #!/bin/sh
-exec "$WASI_SDK_PATH/bin/clang" -mexec-model=reactor "\$@"
+exec "$WASI_SDK_PATH/bin/clang" -mexec-model=reactor -Wl,--allow-undefined \\
+  -Wl,--export=health_healthUpdate -Wl,--export=health_respawned -Wl,--export=health_respawnCommand \\
+  "\$@"
 EOF
 chmod +x "$out/clang"
 
@@ -26,7 +30,7 @@ chmod +x "$out/clang"
   --sysroot "$WASI_SDK_PATH/share/wasi-sysroot" \
   --output-dir "$out/build" \
   -o health.wasm \
-  health="$here/health.vale" shim="$here/shim.c"
+  health="$here/health.vale"
 
 cp "$out/build/health.wasm" "$here/../health.wasm"
 echo "Built $here/../health.wasm"

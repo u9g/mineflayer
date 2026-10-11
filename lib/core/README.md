@@ -35,7 +35,7 @@ CI only runs tests whose name contains a tested version (`mocha -g "<version>v"`
 
 `healthWasm.js` is the health core built from Valen (`valen/health.vale`) to Wasm, with the same `createConfig`, `createState` and `step` as `health.js`. `createHealthPlugin(core)` in `lib/plugins/health.js` builds the plugin on either one, and `test/healthCoreTest.js` runs the core suite and the plugin test on both. The plugin still uses `health.js` by default.
 
-Only ints and floats cross into Wasm, so `healthWasm.js` passes the state fields in on each step and writes back the ones the Valen core returns. The JS state object stays the source of truth, so `exposeState` works unchanged. `valen/build.sh` rebuilds `health.wasm`, which needs the Valen compiler and wasi-sdk; `.github/workflows/valen-wasm.yml` does this on Ubuntu and runs the tests on the fresh build.
+The bot's state stays in JS, so each event passes the fields the Valen core decides on into Wasm, and the core reports its outputs and new state through extern funcs that `healthWasm.js` provides. `exposeState` works unchanged. `valen/build.sh` rebuilds `health.wasm`, which needs the Valen compiler and wasi-sdk; `.github/workflows/valen-wasm.yml` does this on Ubuntu and runs the tests on the fresh build.
 
 ## Converting another plugin
 
